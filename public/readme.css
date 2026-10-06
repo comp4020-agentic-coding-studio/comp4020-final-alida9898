@@ -1,0 +1,7 @@
+:root { --bg: #f3e9da; --ink: #4a2e1f; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #2a1f18; --ink: #f0e2cf; } }
+:root[data-theme="dark"] { --bg: #2a1f18; --ink: #f0e2cf; }
+body { background: var(--bg); color: var(--ink); font-family: "Songti SC", "Noto Serif SC", Georgia, serif; line-height: 1.8; margin: 0; }
+main { max-width: 44rem; margin: 0 auto; padding: 2rem 16px 4rem; }
+img { max-width: 100%; }
+a { color: inherit; }

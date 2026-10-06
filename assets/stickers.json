@@ -1,0 +1,288 @@
+{
+  "canvas": {
+    "w": 1000,
+    "h": 1000,
+    "floorLine": 790
+  },
+  "style": "die-cut sticker illustration for a cozy 'healing coffee shop' sticker scene, hand-drawn storybook style with soft felt and embroidery texture, warm brown cream and mustard palette with muted blue accents, clean outlines, ONLY this single object and nothing else, no other furniture, no building, no scenery, object centered, isolated on a pure white background, no shadow, no text unless specified",
+  "bgStyle": "flat storybook illustration, soft felt texture, warm brown cream palette, completely empty: no furniture, no doors, no windows, no lamps, no signs, no plants, no characters, no text, straight-on front view filling the whole frame",
+  "sides": {
+    "left": [
+      {
+        "id": "l-bg",
+        "step": 1,
+        "z": 0,
+        "x": 0,
+        "y": 0,
+        "w": 1000,
+        "h": 1000,
+        "bg": true,
+        "model": "recraft-v3",
+        "prompt": "a plain blank cream plaster wall with a low brown brick base and a strip of wooden floorboards at the bottom, nothing on the wall",
+        "mount": "floor"
+      },
+      {
+        "id": "l-sign",
+        "step": 3,
+        "z": 11,
+        "x": 560,
+        "y": 150,
+        "w": 320,
+        "h": 110,
+        "model": "ideogram-v3-quality",
+        "prompt": "a small rounded rectangular wooden shop sign that says \"Coffee\" in cream cursive lettering on dark brown",
+        "mount": "wall"
+      },
+      {
+        "id": "l-display",
+        "step": 4,
+        "z": 20,
+        "x": 60,
+        "y": 470,
+        "w": 540,
+        "h": 330,
+        "model": "recraft-v3",
+        "prompt": "a symmetrical front elevation drawing of a low rectangular glass pastry display cabinet, viewed exactly head-on so the left and right sides are not visible, the glass front is a flat rectangle, wooden base, croissants and cakes on two shelves inside, flat top",
+        "mount": "floor",
+        "top": 0.04
+      },
+      {
+        "id": "l-machine",
+        "step": 5,
+        "z": 25,
+        "x": 760,
+        "y": 470,
+        "w": 180,
+        "h": 180,
+        "model": "recraft-v3",
+        "prompt": "a symmetrical front elevation drawing of a vintage espresso machine in cream and copper, viewed exactly head-on so the left and right sides of the machine are not visible, only the flat front face is drawn, like a flat 2D icon with no depth or 3D shading, a plain flat top surface with nothing on it, no coffee beans, no steam, no decoration on top, centered and symmetrical left-to-right",
+        "mount": "surface"
+      },
+      {
+        "id": "l-bar",
+        "step": 6,
+        "z": 40,
+        "x": 300,
+        "y": 620,
+        "w": 680,
+        "h": 330,
+        "model": "recraft-v3",
+        "prompt": "the front of a wooden coffee bar counter seen perfectly straight-on, flat orthographic front elevation with no perspective, dark brown vertical wood planks, a light wooden countertop as a thin flat strip along the top edge, completely empty countertop with nothing on it, no cups, no machines, no shelves, wide horizontal rectangle",
+        "mount": "floor",
+        "cropProps": true,
+        "top": 0.05
+      },
+      {
+        "id": "l-barista",
+        "step": 7,
+        "z": 30,
+        "x": 460,
+        "y": 470,
+        "w": 260,
+        "h": 400,
+        "model": "recraft-v3",
+        "actor": true,
+        "prompt": "a cute calico cat barista standing upright wearing a pink apron and white shirt, holding a coffee cup, friendly smile, full body front view",
+        "mount": "floor"
+      },
+      {
+        "id": "l-board",
+        "step": 8,
+        "z": 45,
+        "x": 10,
+        "y": 640,
+        "w": 190,
+        "h": 300,
+        "model": "recraft-v3",
+        "prompt": "a small chalkboard menu on a wooden frame with simple chalk doodles of coffee cups, no readable words",
+        "mount": "floor"
+      },
+      {
+        "id": "l-plant",
+        "step": 9,
+        "z": 46,
+        "x": 170,
+        "y": 700,
+        "w": 160,
+        "h": 270,
+        "model": "recraft-v3",
+        "prompt": "a leafy green potted plant in a terracotta pot",
+        "mount": "floor"
+      }
+    ],
+    "right": [
+      {
+        "id": "r-bg",
+        "step": 1,
+        "z": 0,
+        "x": 0,
+        "y": 0,
+        "w": 1000,
+        "h": 1000,
+        "bg": true,
+        "model": "recraft-v3",
+        "prompt": "a plain blank cafe interior back wall with cream patterned wallpaper above dark wooden wainscoting and honey wooden floorboards at the bottom, nothing on the wall, empty floor",
+        "mount": "floor"
+      },
+      {
+        "id": "r-window",
+        "step": 2,
+        "z": 10,
+        "x": 330,
+        "y": 60,
+        "w": 340,
+        "h": 400,
+        "model": "recraft-v3",
+        "prompt": "an arched wooden window with stained glass panes in amber green and blue, front view",
+        "mount": "wall"
+      },
+      {
+        "id": "r-shelf",
+        "step": 3,
+        "z": 12,
+        "x": 730,
+        "y": 140,
+        "w": 240,
+        "h": 520,
+        "model": "recraft-v3",
+        "prompt": "a tall dark wooden bookshelf filled with books and small potted plants, front view, tall vertical shape",
+        "mount": "floor"
+      },
+      {
+        "id": "r-clock",
+        "step": 4,
+        "z": 13,
+        "x": 70,
+        "y": 120,
+        "w": 150,
+        "h": 300,
+        "model": "recraft-v3",
+        "prompt": "a small wooden wall pendulum clock, front view",
+        "mount": "wall"
+      },
+      {
+        "id": "r-rug",
+        "step": 5,
+        "z": 15,
+        "x": 140,
+        "y": 760,
+        "w": 720,
+        "h": 220,
+        "model": "recraft-v3",
+        "prompt": "an oval patterned rug in cream and soft brown seen in gentle perspective from the front, wide horizontal shape",
+        "mount": "flat"
+      },
+      {
+        "id": "r-lamp",
+        "step": 6,
+        "z": 20,
+        "x": 40,
+        "y": 400,
+        "w": 170,
+        "h": 460,
+        "model": "recraft-v3",
+        "prompt": "a tall brass floor lamp with a pleated mustard lampshade, glowing softly, tall vertical shape",
+        "mount": "floor"
+      },
+      {
+        "id": "r-chairs",
+        "step": 7,
+        "z": 30,
+        "x": 170,
+        "y": 500,
+        "w": 660,
+        "h": 340,
+        "model": "recraft-v3",
+        "prompt": "two velvet blue armchairs side by side with an empty gap between them, front view, wide horizontal shape, no table",
+        "mount": "floor"
+      },
+      {
+        "id": "r-guest",
+        "step": 8,
+        "z": 32,
+        "x": 230,
+        "y": 470,
+        "w": 200,
+        "h": 260,
+        "model": "recraft-v3",
+        "actor": true,
+        "prompt": "a cute orange tabby cat sitting upright reading a small book, wearing a green scarf, full body front view",
+        "mount": "floor",
+        "sit": true
+      },
+      {
+        "id": "r-table",
+        "step": 9,
+        "z": 35,
+        "x": 400,
+        "y": 650,
+        "w": 200,
+        "h": 200,
+        "model": "recraft-v3",
+        "prompt": "a small round dark wooden side table, empty top, front view",
+        "mount": "floor"
+      },
+      {
+        "id": "r-vine",
+        "step": 10,
+        "z": 50,
+        "x": 0,
+        "y": 0,
+        "w": 1000,
+        "h": 220,
+        "model": "recraft-v3",
+        "prompt": "a garland of trailing green ivy and hanging pothos leaves draping along the top edge, wide horizontal shape",
+        "mount": "wall"
+      }
+    ]
+  },
+  "textures": [
+    {
+      "id": "t-wallpaper",
+      "w": 1000,
+      "h": 1000,
+      "model": "recraft-v3",
+      "prompt": "seamless flat texture swatch of cream wallpaper with a subtle soft brown damask pattern, storybook illustration style, fills the entire frame edge to edge, pattern only"
+    },
+    {
+      "id": "t-plaster",
+      "w": 1000,
+      "h": 1000,
+      "model": "recraft-v3",
+      "prompt": "seamless flat texture swatch of warm cream plaster wall with a few faint exposed bricks, storybook illustration style, fills the entire frame edge to edge, texture only"
+    },
+    {
+      "id": "t-floor",
+      "w": 1000,
+      "h": 1000,
+      "model": "recraft-v3",
+      "prompt": "seamless flat texture swatch of honey brown wooden floorboards viewed straight from above, storybook illustration style, fills the entire frame edge to edge, texture only"
+    }
+  ],
+  "town": [
+    {
+      "id": "l-awning",
+      "step": 2,
+      "z": 10,
+      "x": 80,
+      "y": 40,
+      "w": 840,
+      "h": 260,
+      "model": "recraft-v3",
+      "prompt": "a flat graphic of a striped fabric awning valance strip with a scalloped bottom edge, mustard yellow and cream vertical stripes, just the fabric canopy floating alone, no shop, no building, no wall, no windows, no door, no plants",
+      "mount": "wall"
+    },
+    {
+      "id": "l-aframe",
+      "step": 10,
+      "z": 50,
+      "x": 690,
+      "y": 760,
+      "w": 200,
+      "h": 230,
+      "model": "recraft-v3",
+      "prompt": "a small wooden a-frame sidewalk sign with a chalk drawing of a steaming coffee cup, no readable words",
+      "mount": "floor"
+    }
+  ]
+}

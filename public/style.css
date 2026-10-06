@@ -1,0 +1,118 @@
+:root {
+  --paper: #f3e9da;
+  --paper-2: #eadbc4;
+  --ink: #4a2e1f;
+  --ink-soft: #7a5a44;
+  --stitch: #8a5a3b;
+  --accent: #d9a441;
+  --card: #fbf5ea;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #2a1f18;
+    --paper-2: #33261d;
+    --ink: #f0e2cf;
+    --ink-soft: #c7ad92;
+    --stitch: #b98a63;
+    --card: #3a2c22;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #2a1f18;
+  --paper-2: #33261d;
+  --ink: #f0e2cf;
+  --ink-soft: #c7ad92;
+  --stitch: #b98a63;
+  --card: #3a2c22;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--paper) radial-gradient(circle at 20% 10%, var(--paper-2), transparent 60%);
+  color: var(--ink);
+  font-family: "Songti SC", "Noto Serif SC", Georgia, serif;
+  min-height: 100vh;
+}
+a { color: var(--ink); }
+.small { font-size: 0.85rem; color: var(--ink-soft); }
+
+.landing main { max-width: 34rem; margin: 0 auto; padding: 18vh 16px 4rem; text-align: center; }
+.kicker { letter-spacing: 0.3em; color: var(--ink-soft); font-size: 0.85rem; }
+h1 { font-size: clamp(2.4rem, 8vw, 3.6rem); margin: 0.2em 0 0.4em; letter-spacing: 0.08em; }
+.lede { line-height: 1.9; color: var(--ink-soft); }
+.btn {
+  font: inherit; font-size: 1.1rem; color: var(--card); background: var(--stitch);
+  border: 2px dashed var(--card); outline: 3px solid var(--stitch);
+  border-radius: 14px; padding: 0.7em 2em; margin: 1.5rem 0 1rem; cursor: pointer;
+}
+.btn:disabled { opacity: 0.6; }
+
+.bar { display: flex; gap: 1rem; align-items: baseline; padding: 12px 16px; flex-wrap: wrap; }
+.brand { font-weight: bold; text-decoration: none; letter-spacing: 0.1em; }
+#where { color: var(--ink-soft); flex: 1; }
+#progress { font-variant-numeric: tabular-nums; }
+
+.board {
+  display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 24px;
+  max-width: 1100px; margin: 0 auto; padding: 8px 16px 32px; align-items: start;
+}
+@media (max-width: 760px) { .board { grid-template-columns: 1fr; } }
+
+/* embroidered card frame, like the tri-fold backing card */
+.frame {
+  width: min(100%, calc(100vh - 110px)); justify-self: center;
+  background: var(--card); padding: 14px; border-radius: 22px;
+  border: 3px dashed var(--stitch); outline: 6px solid var(--stitch); outline-offset: -1px;
+  box-shadow: 0 10px 30px rgba(60, 35, 20, 0.25);
+}
+#scene {
+  position: relative; aspect-ratio: 1; width: 100%; overflow: hidden; border-radius: 12px;
+  background: repeating-linear-gradient(45deg, #efe3d0 0 12px, #f6ecdd 12px 24px);
+  touch-action: none; user-select: none;
+}
+#scene img { position: absolute; object-fit: contain; pointer-events: none; }
+#scene .placed { filter: drop-shadow(0 2px 2px rgba(60, 35, 20, 0.25)); }
+#scene .guide { opacity: 0.28; filter: grayscale(1) contrast(0.6); outline: 2px dashed rgba(90, 55, 35, 0.6); outline-offset: 4px; border-radius: 6px; animation: breathe 2.4s ease-in-out infinite; }
+#scene .pressed { animation: press 0.35s ease-out; }
+@keyframes breathe { 50% { opacity: 0.45; } }
+@keyframes press { 0% { transform: scale(1.06); } 60% { transform: scale(0.98); } 100% { transform: none; } }
+
+.tray { background: var(--card); border-radius: 18px; padding: 16px; border: 2px dashed var(--stitch); }
+#hint { margin-top: 0; line-height: 1.7; }
+#sheet { display: grid; place-items: center; min-height: 200px; }
+.peel {
+  position: relative; width: 180px; height: 180px; display: grid; place-items: center;
+  background: linear-gradient(135deg, #fff 0%, #f4efe6 100%); border-radius: 12px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08); cursor: grab; touch-action: none;
+}
+.peel::after { /* lifted corner */
+  content: ""; position: absolute; right: 0; bottom: 0; width: 34px; height: 34px;
+  background: linear-gradient(135deg, #e6dccb 50%, transparent 50%); border-radius: 0 0 12px 0;
+  box-shadow: -2px -2px 4px rgba(0, 0, 0, 0.08);
+}
+.peel img { max-width: 82%; max-height: 82%; filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.2)); transition: transform 0.15s; }
+.peel:hover img { transform: translateY(-4px) rotate(-2deg); }
+.num {
+  position: absolute; left: 8px; top: 6px; font-weight: bold; color: var(--card);
+  background: var(--stitch); border-radius: 50%; width: 28px; height: 28px; display: grid; place-items: center;
+}
+
+#sheet.grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; place-items: stretch; min-height: 0; }
+.peel.mini { width: auto; height: 64px; }
+.peel.mini img { max-width: 80%; max-height: 52px; }
+.peel.mini::after { width: 16px; height: 16px; }
+#scene .movable { pointer-events: auto; cursor: grab; }
+.linkish { font: inherit; background: none; border: 0; text-decoration: underline; cursor: pointer; color: var(--ink-soft); }
+
+.flying {
+  position: fixed; left: 0; top: 0; z-index: 1000; pointer-events: none; object-fit: contain;
+  filter: drop-shadow(0 14px 12px rgba(40, 20, 10, 0.35));
+}
+.flying.snap { transition: transform 0.22s ease-out; filter: none; }
+.flying.back { transition: transform 0.3s ease-in; }
+
+.done #scene { animation: glow 1.6s ease-out; }
+@keyframes glow { 0% { box-shadow: 0 0 0 0 rgba(217, 164, 65, 0.8); } 100% { box-shadow: 0 0 0 30px rgba(217, 164, 65, 0); } }
+.peel.mini.empty { background: transparent; box-shadow: inset 0 0 0 1.5px rgba(122, 90, 68, 0.25); cursor: default; }
+.peel.mini.empty::after { display: none; }

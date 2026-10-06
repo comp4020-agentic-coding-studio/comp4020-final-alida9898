@@ -7,7 +7,9 @@
     "typecheck": "tsc --noEmit",
     "check": "pnpm typecheck && pnpm test",
     "check:evidence": "node scripts/check-evidence.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "start": "node server/main.ts",
+    "dev": "DATA_DIR=./data node --watch server/main.ts"
   },
   "devDependencies": {
     "@types/jsdom": "^30.0.0",
@@ -18,5 +20,8 @@
   },
   "engines": {
     "pnpm": ">=11"
+  },
+  "dependencies": {
+    "marked": "^18.0.14"
   }
 }

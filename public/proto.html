@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>自由摆放原型</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <a href="/" class="brand">隔壁咖啡店</a>
+      <span id="where"></span>
+      <a id="swap" class="small" href="#"></a>
+      <button id="reset" class="small linkish">清空重来</button>
+    </header>
+    <main class="board">
+      <div class="frame"><div id="scene"></div></div>
+      <aside class="tray">
+        <p id="hint">随便拖到哪里都行。靠近淡淡的轮廓会轻轻吸住。贴好的还能拿起来，拖回这里就是撕下来。</p>
+        <div id="sheet" class="grid"></div>
+      </aside>
+    </main>
+    <script type="module" src="/proto.js"></script>
+  </body>
+</html>
