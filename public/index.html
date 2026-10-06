@@ -3,22 +3,84 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>隔壁咖啡店</title>
+    <title>小镇一角 · A Corner of Town</title>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body class="landing">
+    <button id="lang-toggle" class="lang-toggle" type="button" aria-label="Switch language">EN</button>
     <main>
-      <p class="kicker">一套两半的造景贴纸</p>
-      <h1>隔壁咖啡店</h1>
-      <p class="lede">
+      <p class="kicker" id="kicker">A Corner of Town</p>
+      <h1 id="h1">小镇一角</h1>
+      <p class="lede" id="lede">
         你拼一半，一个陌生人拼另一半：一边是店门口和柜台，一边是里屋的座位。<br />
         一个人也能拼完。两个人都在的时候，中间那扇门会打开。
       </p>
-      <button id="start" class="btn">开始拼贴</button>
+      <div class="town-map">
+        <img src="/town-map.webp" alt="小镇地图，目前只有咖啡店盖好了" />
+        <button id="plot-coffee" class="hotspot">
+          <span class="label">点它进去拼 →</span>
+        </button>
+      </div>
+      <p class="small town-caption" id="town-caption">小镇目前只有咖啡店装修好了，点它进去拼；其余地方还没轮到。</p>
       <p id="resume" hidden><a href="#">继续拼我的那一半 →</a></p>
-      <p class="small"><a href="/readme/">关于这个作品</a></p>
+      <p class="small"><a href="/readme/" id="about-link">关于这个作品</a></p>
     </main>
     <script type="module">
+      const TEXT = {
+        zh: {
+          kicker: "A Corner of Town",
+          h1: "小镇一角",
+          lede: "你拼一半，一个陌生人拼另一半：一边是店门口和柜台，一边是里屋的座位。<br />一个人也能拼完。两个人都在的时候，中间那扇门会打开。",
+          mapAlt: "小镇地图，目前只有咖啡店盖好了",
+          hotspot: "点它进去拼 →",
+          caption: "小镇目前只有咖啡店装修好了，点它进去拼；其余地方还没轮到。",
+          resume: "继续拼我的那一半 →",
+          about: "关于这个作品",
+          toggle: "EN",
+          inviteCaption: "有人邀请你一起拼这个场景，点它加入 →",
+          inviteInvalid: "这个邀请链接已经失效了，帮你开一个新的吧。",
+          inviteFull: "这个场景已经有两个人在拼了，帮你开一个新的吧。",
+        },
+        en: {
+          kicker: "小镇一角",
+          h1: "A Corner of Town",
+          lede: "You build half, a stranger builds the other half: one side is the shop front and counter, the other is the seating inside.<br />You can finish it alone too. When you're both there, the door between you opens.",
+          mapAlt: "Town map — only the coffee shop is built so far",
+          hotspot: "Tap to start building →",
+          caption: "Only the coffee shop is built so far — tap it to start. The rest isn't unlocked yet.",
+          resume: "Resume my half →",
+          about: "About this project",
+          toggle: "中文",
+          inviteCaption: "Someone invited you to build this scene with them — tap to join →",
+          inviteInvalid: "That invite link isn't valid anymore — starting you a fresh one instead.",
+          inviteFull: "Two people are already building this one — starting you a fresh one instead.",
+        },
+      };
+      const invite = new URLSearchParams(location.search).get("invite");
+      const LANG_KEY = "lang";
+      let lang = "zh";
+      try { lang = localStorage.getItem(LANG_KEY) || "zh"; } catch {}
+
+      function applyLang() {
+        const t = TEXT[lang];
+        document.documentElement.lang = lang === "zh" ? "zh" : "en";
+        document.getElementById("kicker").textContent = t.kicker;
+        document.getElementById("h1").textContent = t.h1;
+        document.getElementById("lede").innerHTML = t.lede;
+        document.querySelector("#plot-coffee .label").textContent = t.hotspot;
+        document.querySelector(".town-map img").alt = t.mapAlt;
+        document.getElementById("town-caption").textContent = invite ? t.inviteCaption : t.caption;
+        document.querySelector("#resume a").textContent = t.resume;
+        document.getElementById("about-link").textContent = t.about;
+        document.getElementById("lang-toggle").textContent = t.toggle;
+      }
+      applyLang();
+      document.getElementById("lang-toggle").addEventListener("click", () => {
+        lang = lang === "zh" ? "en" : "zh";
+        try { localStorage.setItem(LANG_KEY, lang); } catch {}
+        applyLang();
+      });
+
       const KEY = "my-half";
       let saved = null;
       try { saved = localStorage.getItem(KEY); } catch {}
@@ -27,9 +89,20 @@
         r.hidden = false;
         r.querySelector("a").href = `/s/${saved}`;
       }
-      document.getElementById("start").addEventListener("click", async (e) => {
-        e.target.disabled = true;
-        const { token } = await (await fetch("/api/join", { method: "POST" })).json();
+      document.getElementById("plot-coffee").addEventListener("click", async (e) => {
+        e.currentTarget.disabled = true;
+        const res = invite
+          ? await fetch(`/api/rooms/${invite}/join`, { method: "POST" })
+          : await fetch("/api/join", { method: "POST" });
+        if (!res.ok) {
+          const t = TEXT[lang];
+          alert(res.status === 404 ? t.inviteInvalid : t.inviteFull);
+          const { token } = await (await fetch("/api/join", { method: "POST" })).json();
+          try { localStorage.setItem(KEY, token); } catch {}
+          location.href = `/s/${token}`;
+          return;
+        }
+        const { token } = await res.json();
         try { localStorage.setItem(KEY, token); } catch {}
         location.href = `/s/${token}`;
       });
