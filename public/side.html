@@ -3,12 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>隔壁咖啡店</title>
+    <title>小镇一角</title>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <header class="bar">
-      <a href="/" class="brand">隔壁咖啡店</a>
+      <button id="lang-toggle" class="lang-toggle bar-toggle" type="button" aria-label="Switch language">EN</button>
+      <a href="/" class="brand" id="brand">小镇一角</a>
       <span id="where"></span>
       <span id="progress"></span>
     </header>
@@ -16,8 +17,13 @@
       <div class="frame"><div id="scene"></div></div>
       <aside class="tray">
         <p id="hint">把贴纸揭下来，对准淡淡的轮廓贴上去</p>
-        <div id="sheet"></div>
-        <p class="small">这条链接就是你的那一半，收藏好它就能回来继续。</p>
+        <div id="sheet" class="grid"></div>
+        <p id="invite-banner" class="small" hidden>
+          <span id="invite-line">对面还没人 —— 把这条链接发给搭子，邀请对方来拼另一半：</span><br />
+          <a id="invite-link" href="#" target="_blank" rel="noopener"></a>
+          <button id="copy-invite" class="linkish" type="button">复制</button>
+        </p>
+        <p class="small" id="footer-caption">这条链接就是你的那一半，收藏好它就能回来继续。</p>
       </aside>
     </main>
     <script type="module" src="/side.js"></script>

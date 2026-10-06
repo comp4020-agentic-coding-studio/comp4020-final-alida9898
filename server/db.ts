@@ -3,7 +3,7 @@ import { mkdirSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 
 export type Side = "left" | "right";
-export type Half = { token: string; room: string; side: Side; step: number };
+export type Half = { token: string; room: string; side: Side; placed: string[] };
 
 const dir = process.env.DATA_DIR ?? "/data";
 mkdirSync(dir, { recursive: true });
@@ -14,13 +14,19 @@ db.exec(`
     token TEXT PRIMARY KEY,
     room TEXT NOT NULL,
     side TEXT NOT NULL CHECK (side IN ('left', 'right')),
-    step INTEGER NOT NULL DEFAULT 0,
+    placed TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (room, side)
   );
 `);
 
 const id = (bytes: number) => randomBytes(bytes).toString("base64url");
+const row = (r: { token: string; room: string; side: Side; placed: string }): Half => ({
+  token: r.token,
+  room: r.room,
+  side: r.side,
+  placed: JSON.parse(r.placed),
+});
 
 export function join(): Half & { opened: boolean } {
   db.exec("BEGIN IMMEDIATE");
@@ -35,7 +41,7 @@ export function join(): Half & { opened: boolean } {
     const token = id(12);
     db.prepare("INSERT INTO halves (token, room, side) VALUES (?, ?, ?)").run(token, room, side);
     db.exec("COMMIT");
-    return { token, room, side, step: 0, opened: !open };
+    return { token, room, side, placed: [], opened: !open };
   } catch (e) {
     db.exec("ROLLBACK");
     throw e;
@@ -43,11 +49,51 @@ export function join(): Half & { opened: boolean } {
 }
 
 export function half(token: string): Half | undefined {
-  return db.prepare("SELECT token, room, side, step FROM halves WHERE token = ?").get(token) as Half | undefined;
+  const r = db.prepare("SELECT token, room, side, placed FROM halves WHERE token = ?").get(token) as
+    | { token: string; room: string; side: Side; placed: string }
+    | undefined;
+  return r && row(r);
 }
 
-// Only the next step is accepted, so a replayed or skipped request can't corrupt progress.
-export function advance(token: string, step: number, maxStep: number): boolean {
-  if (step > maxStep) return false;
-  return db.prepare("UPDATE halves SET step = ? WHERE token = ? AND step = ?").run(step, token, step - 1).changes === 1;
+export function roomStatus(room: string): { exists: boolean; full: boolean } {
+  const rows = db.prepare("SELECT side FROM halves WHERE room = ?").all(room) as { side: Side }[];
+  return { exists: rows.length > 0, full: rows.length >= 2 };
+}
+
+// Lets a specific invite link join the room it names, instead of the random
+// matchmaking in join() — so you can bring a specific person in rather than
+// whoever else happens to be waiting.
+export function joinRoom(room: string): (Half & { opened: boolean }) | { error: "not_found" | "full" } {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const rows = db.prepare("SELECT side FROM halves WHERE room = ?").all(room) as { side: Side }[];
+    if (rows.length === 0) {
+      db.exec("ROLLBACK");
+      return { error: "not_found" };
+    }
+    if (rows.length >= 2) {
+      db.exec("ROLLBACK");
+      return { error: "full" };
+    }
+    const side: Side = rows[0].side === "left" ? "right" : "left";
+    const token = id(12);
+    db.prepare("INSERT INTO halves (token, room, side) VALUES (?, ?, ?)").run(token, room, side);
+    db.exec("COMMIT");
+    return { token, room, side, placed: [], opened: false };
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
+// Stickers can be placed in any order (no forced sequence) — this just marks
+// one as done. Placing the same id twice is a harmless no-op, so a retried
+// request can't double-count or error.
+export function place(token: string, stickerId: string): string[] | undefined {
+  const h = half(token);
+  if (!h) return undefined;
+  if (h.placed.includes(stickerId)) return h.placed;
+  const placed = [...h.placed, stickerId];
+  db.prepare("UPDATE halves SET placed = ? WHERE token = ?").run(JSON.stringify(placed), token);
+  return placed;
 }

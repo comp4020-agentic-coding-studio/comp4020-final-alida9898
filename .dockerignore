@@ -11,3 +11,7 @@ dist
 mise.local.toml
 *.pem
 .claude
+# raw source renders for the sticker pipeline — Dockerfile only needs the
+# final assets/stickers.json + public/stickers/*.webp, not these
+assets/raw
+assets/draft

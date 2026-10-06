@@ -1,12 +1,24 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { extname, join as pathJoin, normalize } from "node:path";
 import { marked } from "marked";
-import { advance, half, join } from "./db.ts";
+import { half, join, joinRoom, place, roomStatus } from "./db.ts";
 
-const manifest = JSON.parse(await readFile("assets/stickers.json", "utf8"));
-const stepsPerSide: Record<string, number> = Object.fromEntries(
-  Object.entries(manifest.sides).map(([side, list]) => [side, (list as unknown[]).length]),
+const STICKERS_PATH = "assets/stickers.json";
+const manifest = JSON.parse(await readFile(STICKERS_PATH, "utf8"));
+// the layout editor writes straight to assets/stickers.json — a dev-only
+// authoring tool, not something to leave reachable on the deployed app
+const layoutEditingEnabled = process.env.NODE_ENV !== "production";
+const MOUNTS = new Set(["wall", "flat", "floor", "surface"]);
+type LayoutUpdate = {
+  x: number; y: number; w: number; h: number;
+  mount?: string; sit?: boolean; pinHost?: string; top?: number | null; z?: number;
+};
+const idsPerSide: Record<string, Set<string>> = Object.fromEntries(
+  Object.entries(manifest.sides).map(([side, list]) => [
+    side,
+    new Set((list as Array<{ id: string; bg?: boolean }>).filter((s) => !s.bg).map((s) => s.id)),
+  ]),
 );
 
 const types: Record<string, string> = {
@@ -63,18 +75,50 @@ const server = createServer(async (req, res) => {
   let m: RegExpMatchArray | null;
   try {
     if (req.method === "POST" && p === "/api/join") return json(res, 200, join());
+    if ((m = p.match(/^\/api\/rooms\/([\w-]+)\/join$/)) && req.method === "POST") {
+      const result = joinRoom(m[1]);
+      if ("error" in result) {
+        return json(res, result.error === "not_found" ? 404 : 409, { error: result.error });
+      }
+      return json(res, 200, result);
+    }
+    if ((m = p.match(/^\/api\/rooms\/([\w-]+)\/status$/)) && req.method === "GET") {
+      return json(res, 200, roomStatus(m[1]));
+    }
     if ((m = p.match(/^\/api\/s\/([\w-]+)$/)) && req.method === "GET") {
       const h = half(m[1]);
-      return h ? json(res, 200, { side: h.side, step: h.step, room: h.room }) : json(res, 404, { error: "unknown link" });
+      return h ? json(res, 200, { side: h.side, placed: h.placed, room: h.room }) : json(res, 404, { error: "unknown link" });
     }
-    if ((m = p.match(/^\/api\/s\/([\w-]+)\/step$/)) && req.method === "POST") {
+    if ((m = p.match(/^\/api\/s\/([\w-]+)\/place$/)) && req.method === "POST") {
       const h = half(m[1]);
       if (!h) return json(res, 404, { error: "unknown link" });
-      const step = Number((await body(req)).step);
-      if (!Number.isInteger(step) || !advance(h.token, step, stepsPerSide[h.side])) {
-        return json(res, 409, { error: "not the next step", step: half(h.token)?.step });
+      const stickerId = (await body(req)).id;
+      if (typeof stickerId !== "string" || !idsPerSide[h.side]?.has(stickerId)) {
+        return json(res, 400, { error: "unknown sticker" });
       }
-      return json(res, 200, { step });
+      return json(res, 200, { placed: place(h.token, stickerId) });
+    }
+    if ((m = p.match(/^\/api\/layout\/([\w-]+)$/)) && req.method === "POST") {
+      if (!layoutEditingEnabled) return json(res, 403, { error: "layout editing is disabled in production" });
+      const side = m[1];
+      const list = manifest.sides[side] as Array<Record<string, unknown>> | undefined;
+      if (!list) return json(res, 404, { error: "unknown side" });
+      const updates = (await body(req)) as Record<string, LayoutUpdate>;
+      for (const s of list) {
+        const u = updates[s.id as string];
+        if (!u || ![u.x, u.y, u.w, u.h].every((n) => typeof n === "number" && Number.isFinite(n))) continue;
+        s.x = Math.round(u.x);
+        s.y = Math.round(u.y);
+        s.w = Math.round(u.w);
+        s.h = Math.round(u.h);
+        if ("mount" in u && typeof u.mount === "string" && MOUNTS.has(u.mount)) s.mount = u.mount;
+        if ("sit" in u) { if (u.sit) s.sit = true; else delete s.sit; }
+        if ("pinHost" in u) { if (typeof u.pinHost === "string" && u.pinHost) s.pinHost = u.pinHost; else delete s.pinHost; }
+        if ("top" in u) { if (typeof u.top === "number" && Number.isFinite(u.top)) s.top = Math.round(u.top * 100) / 100; else delete s.top; }
+        if ("z" in u && typeof u.z === "number" && Number.isFinite(u.z)) s.z = Math.round(u.z);
+      }
+      await writeFile(STICKERS_PATH, JSON.stringify(manifest, null, 2) + "\n");
+      return json(res, 200, { ok: true });
     }
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "method not allowed");
     if (p === "/readme" || p === "/readme/") return readme(res);

@@ -3,23 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>自由摆放原型</title>
+    <title>素材编排器</title>
     <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/edit.css" />
   </head>
   <body>
     <header class="bar">
       <a href="/" class="brand">小镇一角</a>
       <span id="where"></span>
       <a id="swap" class="small" href="#"></a>
-      <button id="reset" class="small linkish">清空重来</button>
+      <button id="save" class="small linkish">保存</button>
+      <span id="status" class="small"></span>
     </header>
     <main class="board">
       <div class="frame"><div id="scene"></div></div>
       <aside class="tray">
-        <p id="hint">随便拖到哪里都行。靠近淡淡的轮廓会轻轻吸住。贴好的还能拿起来，拖回这里就是撕下来。</p>
-        <div id="sheet" class="grid"></div>
+        <p id="hint">拖贴纸调位置，拖右下角小圆点调大小；下面列表里拖动条目可以调图层前后，也能在右边直接输数字。排好点"保存"，直接写进 stickers.json。</p>
+        <div id="inspector"></div>
+        <div id="legend"></div>
       </aside>
     </main>
-    <script type="module" src="/proto.js"></script>
+    <script type="module" src="/edit.js"></script>
   </body>
 </html>
