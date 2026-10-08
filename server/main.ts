@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { extname, join as pathJoin, normalize } from "node:path";
 import { marked } from "marked";
 import { half, join, joinRoom, place, roomHalves, roomStatus } from "./db.ts";
@@ -123,6 +123,24 @@ const server = createServer(async (req, res) => {
       }
       await writeFile(STICKERS_PATH, JSON.stringify(manifest, null, 2) + "\n");
       return json(res, 200, { ok: true });
+    }
+    // dev-only: clay-test.html saves its rendered sticker drafts here (same guard as layout editing)
+    if (p === "/api/clay/draft" && req.method === "POST") {
+      if (!layoutEditingEnabled) return json(res, 403, { error: "draft saving is disabled in production" });
+      const list = (await body(req)).stickers;
+      if (!Array.isArray(list)) return json(res, 400, { error: "expected { stickers: [] }" });
+      const dir = "assets/draft/clay";
+      await mkdir(dir, { recursive: true });
+      const boxes: Record<string, unknown> = {};
+      for (const s of list as Array<Record<string, unknown>>) {
+        const id = s.id, png = s.png;
+        if (typeof id !== "string" || !/^[\w-]+$/.test(id) || typeof png !== "string" || !png.startsWith("data:image/png;base64,")) continue;
+        await writeFile(pathJoin(dir, `${id}.png`), Buffer.from(png.slice(png.indexOf(",") + 1), "base64"));
+        const { png: _png, ...meta } = s;
+        boxes[id] = meta;
+      }
+      await writeFile(pathJoin(dir, "boxes.json"), JSON.stringify(boxes, null, 2) + "\n");
+      return json(res, 200, { ok: true, saved: Object.keys(boxes).length });
     }
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "method not allowed");
     if (p === "/readme" || p === "/readme/") return readme(res);

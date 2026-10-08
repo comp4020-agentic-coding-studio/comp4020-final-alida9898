@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Clay pipeline test</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+      }
+    </script>
+    <style>
+      body { margin: 0; font: 13px/1.4 system-ui, sans-serif; background: #f4ede2; color: #3b2f27; }
+      main { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; height: calc(100vh - 24px); }
+      #view { width: 100%; height: 100%; display: block; border-radius: 8px; background: #e9dfcf; }
+      aside { overflow: auto; }
+      .sheet { display: flex; flex-wrap: wrap; gap: 8px; }
+      .card { background: #fff; border-radius: 6px; padding: 6px; width: 150px; }
+      .card img { width: 138px; height: 110px; object-fit: contain; display: block;
+        background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 0 0 / 12px 12px; }
+      .card code { font-size: 11px; display: block; }
+      .previews { display: flex; gap: 8px; flex-wrap: wrap; }
+      .preview { position: relative; width: 320px; height: 320px; background: #efe3cf; overflow: hidden; border-radius: 6px; }
+      .preview .floor { position: absolute; left: 0; right: 0; top: 79%; bottom: 0; background: #d7c3a5; }
+      .preview img { position: absolute; }
+      .preview .box { position: absolute; outline: 1px dashed rgba(200,0,0,.5); }
+      @media (max-width: 800px) { main { grid-template-columns: 1fr; height: auto; } #view { height: 60vh; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <canvas id="view"></canvas>
+      <aside>
+        <p><label><input type="checkbox" id="boxes" checked /> show boxes</label>
+          <button id="save" type="button">Save to assets/draft/clay/</button> <span id="status"></span></p>
+        <h3>2D preview (composed from computed boxes)</h3>
+        <div class="previews" id="previews"></div>
+        <h3>Sticker sheet</h3>
+        <div class="sheet" id="sheet"></div>
+      </aside>
+    </main>
+    <script type="module" src="/clay-test.js"></script>
+  </body>
+</html>
