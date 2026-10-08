@@ -26,20 +26,29 @@ Files: `clay.js` (kit) · `models/<object>.js` (one per object) · `scene.js`
 export function build(kit, opts = {}) {      // → THREE.Group
   const { name = "<object>" } = opts;        // name is the id prefix
   const g = new kit.THREE.Group(); g.name = name;
-  g.add(kit.part(`${name}-<part>`, { mount: "floor", order: 1 }, ...meshes));
+  g.add(kit.part(name, { mount: "floor", order: 1 }, ...meshes));
   return g;
 }
 ```
 
 - Every sticker is a `kit.part(id, { mount, order }, ...children)` group,
-  a **direct child** of the returned group. Id: `<object>-<part>`, `[a-z0-9-]`.
+  a **direct child** of the returned group. Id: `<object>` for the object itself,
+  `<object>-<thing>` for each extra carry-able thing on/with it, `[a-z0-9-]`.
   Anything not inside a part is not rendered as a sticker — so put every mesh in a part.
+- **One part = one thing a person could pick up and carry on its own**
+  (一张贴纸 = 人能拿起来的一个完整东西). Components of an object are merged into
+  it, never split: coffee machine = body + gauge + group heads + portafilters
+  (`coffee-machine`), the cup on top is its own (`coffee-machine-cup`); armchair =
+  frame + seat + back + arms, the pillow is its own; potted plant = pot + soil +
+  leaves; shelf = 1, each book = 1. Want more stickers? Add more small carry-able
+  objects (cups, plates, cakes, books, frames, cushions, small plants), not finer splits.
 - `mount`: `"wall"` (hangs on wall) · `"floor"` (stands on floor) ·
   `"surface"` (sits on another thing) · `"flat"` (lies flat, e.g. rug).
 - `order`: placement step within the object (1, 2, … — lower is stuck first).
 - Optional `part.userData.zBias` (integer, default 0): 2D stacking nudge. 2D
   layer `z` = part's distance from the wall in cm + zBias (bigger = on top).
-  Use −1 for things that sit *inside* another part (soil inside pot).
+  Give a thing resting on/in another object a positive bias so it draws over it
+  (cup on machine, pillow in chair, books on shelf).
 - Use only kit materials/helpers so the look stays consistent. Chunky,
   rounded, simplified — no sharp edges, no tiny detail (< ~2 cm is invisible).
 - See `models/pot.js` for a complete example.

@@ -7,11 +7,8 @@
 //   opts: passed to build(kit, opts); `name` overrides the object name / id prefix
 //   todo: true → placeholder, skipped until the model file exists
 export const SCENE = [
-  { model: "pot", wall: "left", u: 330, d: 40, y: 0, opts: { name: "pot", scale: 1.6 } },
+  { model: "plant", wall: "left", u: 330, d: 40, y: 0, opts: { name: "plant", potScale: 1.6, leafScale: 1.2 } }, // pot + soil + leaves, one sticker
   { model: "pot", wall: "right", u: 70, d: 30, y: 0, opts: { name: "smallpot", scale: 1 } }, // exercises the right-wall projection
-
-  // --- placeholders for the model agents (remove `todo` when the file exists) ---
-  { model: "plant", wall: "left", u: 330, d: 40, y: 35, opts: { name: "plant", scale: 1.2 } }, // leaves sitting in the pot (pot rim at y ≈ 34 with scale 1.6)
   { model: "armchair", wall: "right", u: 150, d: 45, y: 0, opts: { name: "armchair" } },
   { model: "coffee-machine", wall: "left", u: 150, d: 24, y: 95, opts: { name: "coffee-machine" } }, // sits on a (future) counter top at 95 cm; back touches the wall
   { model: "books", wall: "left", u: 150, d: 10, y: 175, opts: { name: "books", seed: 7, count: 10 } }, // generator: wall shelf + 10 books, above the coffee machine
