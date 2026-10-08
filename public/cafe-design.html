@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>咖啡馆设计 Café Design</title>
+<style>
+:root{--bg:#f3e9da;--paper:#f0e2cf;--ink:#2a1f18;--soft:#4a2e1f;--line:#c7ad92;--accent:#b98a63;--new:#8a5a3a;--zone:#e6d3bb}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Songti SC","Noto Serif SC",Georgia,serif;line-height:1.55}
+main{max-width:1180px;margin:0 auto;padding:24px 16px 80px}
+h1{font-size:2rem;margin:.2em 0}h2{margin-top:2.2em;border-bottom:2px solid var(--line);padding-bottom:.2em}
+h2 small,h1 small{font-weight:normal;color:var(--soft);font-size:.6em;margin-left:.4em}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 18px;margin:12px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:820px){.grid2{grid-template-columns:1fr}}
+svg{width:100%;height:auto;display:block;background:#fbf5ec;border-radius:10px;border:1px solid var(--line)}
+svg text{font-family:inherit}
+table{border-collapse:collapse;width:100%;font-size:.86rem}th,td{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top}
+th{background:var(--zone);position:sticky;top:0}tr.zone td{background:#ead9c2;font-weight:bold}
+.legend span{display:inline-block;margin-right:16px}.sw{display:inline-block;width:22px;height:12px;vertical-align:middle;margin-right:4px;border:2px solid var(--soft)}
+.dash{border-style:dashed;border-color:var(--new)}
+.tot{font-size:1.05rem}.muted{color:var(--soft)}ol li,ul li{margin:.25em 0}
+</style>
+</head>
+<body><main>
+<h1>小镇一角 · 咖啡馆 <small>A Corner of Town — Café design sheet</small></h1>
+<p class="muted">Design only, nothing built yet. Every object has one fixed place. The player never picks anything; they find where a sticker goes and press it down. Drawings are to scale: in the elevations and floor plan, 1 grid square = 10 cm. Solid outline = model already exists, dashed = new.</p>
+
+<h2>1 · 墙的尺寸 <small>Wall size</small></h2>
+<div class="card">
+<p><b>Recommendation: make each wall 320 cm wide with a 250 cm ceiling</b> (today it is 400 cm wide and about 316 cm high).</p>
+<ul>
+<li><b>Legibility.</b> The half-canvas is 1000 px wide, so 400 cm gives 2.5 px/cm and 320 cm gives 3.125 px/cm. Everything gets 25% bigger. A 6 cm sugar bowl goes from 15 px to 19 px, and a 30 cm machine from 75 px to 94 px.</li>
+<li><b>Ceiling.</b> With <code>FLOOR_LINE</code> at canvas y 790, 320 cm leaves 790 / 3.125 ≈ 253 cm above the floor. That is a real café ceiling (250 cm) with no empty band at the top. 400 cm shows 316 cm, and the top 70 cm of that is dead wall.</li>
+<li><b>Room for items.</b> 320 cm still takes a door plus a 180 cm counter on the left wall, and a reading nook plus a 160 cm brewing bench on the right. About 50 stickers per wall fit because they stack vertically (counter → back-bar shelves → lamps) and the small things live in zoom regions. A narrower wall would have to drop the door or the nook.</li>
+<li><b>Small items are solved by zoom, not by wall size.</b> Shrinking the wall to 250 cm would still leave beans at ~5 px. Zoom regions of about 90–130 cm × 65–80 cm are shown at ~2.5–3.5×, so each cm becomes 8–11 px.</li>
+<li><b>Cost.</b> One constant (half width 400 → 320) in <code>clay/README.md</code>/pipeline, plus moving the objects marked “move” below. The room becomes 320 × 320 cm.</li>
+</ul>
+</div>
+
+<h2>2 · 平面图 <small>Floor plan (top-down)</small></h2>
+<div class="card"><div id="plan"></div>
+<p class="muted">The corner is at the top right. The left wall (shop front) runs along the top. Its u = 0 end, far from the corner, has the glass door. The right wall (seating) runs down the right side, and its u = 0 is the corner. The walkway runs from the door, diagonally across the rug, to the reading nook. The café table sits on the rug so the player can “see” where a customer would sit.</p></div>
+
+<h2>3 · 立面图 + 4 · 放大区域 <small>Wall elevations & zoom regions</small></h2>
+<div class="legend card"><span><i class="sw"></i>exists 已有</span><span><i class="sw dash"></i>new 新增</span><span><i class="sw" style="background:#e6d3bb;border-color:#e6d3bb"></i>zone 区域</span><span><i class="sw" style="border-color:#c0603a"></i>zoom region 放大区 (click → zoom)</span></div>
+<h3>左墙 · 店面与咖啡吧 <small class="muted">Left wall — shop front & coffee bar (u 0 = door end, u 320 = corner)</small></h3>
+<div id="elevL"></div>
+<h3>右墙 · 座位与冲煮台 <small class="muted">Right wall — seating & brewing bench (u 0 = corner)</small></h3>
+<div id="elevR"></div>
+<div class="card" id="zooms"></div>
+
+<h2>5 · 物件表 <small>Object list</small></h2>
+<div class="card tot" id="totals"></div>
+<div class="card" style="max-height:640px;overflow:auto"><table id="tbl"></table></div>
+
+<h2>6 · 摆放顺序 <small>Suggested placement order</small></h2>
+<div class="card"><p class="muted">Only a hint for the sticker tray's sort order: big → medium → small inside each zone, so things that hold others go down first (counter before cups). Any order still works, and nothing is locked.</p><div id="order" class="grid2"></div></div>
+
+<h2>7 · 待定问题 <small>Open questions (things I guessed)</small></h2>
+<div class="card"><ol>
+<li><b>Which end is the corner?</b> I assumed left-wall u = 320 and right-wall u = 0 meet at the corner, matching world x ∈ [−400, 0] → corner at x = 0. If the pipeline maps it the other way, mirror the left wall (door at the corner end).</li>
+<li><b>Door: architecture or sticker?</b> I drew the door and the windows as fixed background (not carry-able). The “OPEN” sign hanging on the door is a sticker.</li>
+<li><b>Moving the bookshelf.</b> The 10 books + shelf currently sit above the espresso machine. I moved them to the right wall above the armchair (reading nook) and gave the bar real back-bar shelves for jars and cups instead. OK?</li>
+<li><b>Pendant lamps</b> hang from the ceiling, which has no plane. I treated them as <code>mount: "wall"</code> stickers whose cord reaches the top edge.</li>
+<li><b>Zoom factor.</b> I assumed the zoom view fills the same 1000 px canvas width. Regions are ~90–130 cm wide → 2.5–3.5×. If the zoom view is smaller (e.g. a phone), regions should be narrower.</li>
+<li><b>Sideboard width.</b> 320 cm only fits the brewing bench if <code>sideboard</code> uses its <code>width</code> option at 160 (from 180), with the six brewing tools at ~25 cm spacing.</li>
+<li><b>Café table + stools</b> stand ~110 cm out from the wall, so in 2D they overlap the bench's lower half. Is that depth-overlap fine, or should the table go in front of the window instead?</li>
+<li><b>Cats</b> are left as an optional slot (window sill on the right wall, 30 × 20 cm, plus the rug). Nothing depends on them, and they are not counted.</li>
+<li><b>Rug</b> is <code>flat</code>; on the right-wall 2D view it shows as a thin strip at the floor line. Should it belong to one wall, or appear only after the unfold?</li>
+</ol></div>
+</main>
+<script>
+// [wall, zone, id, 中文, English, u(centre), y(bottom), w, h, count, mount, status, gen, zoom, d(depth from wall, for plan), dd(depth size)]
+// status: E exists · M exists, moved/resized · N new
+const O = [
+// ---------- LEFT ----------
+["L","entrance","door-sign","营业牌","OPEN sign on door",48,150,30,18,1,"wall","N",0,"L1"],
+["L","entrance","doormat","门垫","doormat",48,0,70,2,1,"flat","N",0,"L1",30,45],
+["L","entrance","umbrella-stand","伞桶","umbrella stand",102,0,22,48,1,"floor","N",0,"L1",14,22],
+["L","entrance","umbrella","雨伞","umbrellas",102,20,10,70,2,"surface","N",1,"L1"],
+["L","entrance","a-frame-sign","立式黑板","A-frame sign",60,0,50,90,1,"floor","M",0,"L1",120,40],
+["L","entrance","wall-clock","挂钟","wall clock",102,175,30,30,1,"wall","N",0,""],
+["L","bar","counter","吧台","counter",200,0,180,95,1,"floor","E",0,"",27,55],
+["L","bar","coffee-machine","咖啡机","espresso machine",145,95,60,45,1,"surface","E",0,"L2"],
+["L","bar","coffee-machine-cup","机顶杯","cup on machine",145,140,9,8,1,"surface","E",0,"L2"],
+["L","bar","milk-jug","拉花缸","milk jug",183,95,9,11,1,"surface","N",0,"L2"],
+["L","bar","tamper","压粉器","tamper",120,95,6,8,1,"surface","N",0,"L2"],
+["L","bar","knock-box","敲渣桶","knock box",172,95,13,12,1,"surface","N",0,"L2"],
+["L","bar","sugar-cubes","方糖","sugar cubes",196,95,8,6,1,"surface","M",0,"L2"],
+["L","bar","glass-tea","玻璃杯茶","glass of tea",206,95,8,11,1,"surface","M",0,"L2"],
+["L","pastry","pastry-case","糕点柜","pastry display case",262,95,52,38,1,"surface","N",0,"L3"],
+["L","pastry","cake-slice","蛋糕切块","cake slices",262,105,9,7,3,"surface","N",1,"L3"],
+["L","pastry","croissant","可颂","croissants",262,117,12,6,2,"surface","N",1,"L3"],
+["L","pastry","cookie-jar","饼干罐","cookie jar",226,95,13,18,1,"surface","N",0,"L3"],
+["L","pastry","coffee-cup","咖啡杯","coffee cups",226,113,9,8,3,"surface","M",1,"L3"],
+["L","pastry","takeaway-cup","外带杯","takeaway cups",242,95,9,13,2,"surface","M",1,"L3"],
+["L","pastry","coffee-beans","咖啡豆","coffee beans",247,95,4,3,1,"surface","M",0,"L3"],
+["L","pastry","tip-jar","小费罐","tip jar",283,95,9,13,1,"surface","N",0,"L3"],
+["L","pastry","napkin-holder","纸巾架","napkin holder",294,95,10,9,1,"surface","N",0,"L3"],
+["L","pastry","saucer","碟子","saucers",215,95,13,2,2,"surface","N",1,"L3"],
+["L","backbar","backbar-shelf","吧台吊架","back-bar shelves",160,150,110,4,2,"wall","N",1,"L4"],
+["L","backbar","bean-jar","豆罐","bean jars",125,154,12,18,3,"surface","N",1,"L4"],
+["L","backbar","mug","马克杯","mugs",165,154,10,9,4,"surface","N",1,"L4"],
+["L","backbar","syrup-bottle","糖浆瓶","syrup bottles",195,154,7,22,3,"surface","N",1,"L4"],
+["L","backbar","tea-tin","茶罐","tea tins",135,184,9,13,3,"surface","N",1,"L4"],
+["L","backbar","shelf-plant","小绿植","small shelf plant",190,184,14,18,1,"surface","N",0,"L4"],
+["L","backbar","pendant-lamp","吊灯","pendant lamps",180,200,28,50,2,"wall","N",1,""],
+["L","backbar","menu-board","菜单板","menu board",262,150,64,80,1,"wall","N",0,""],
+["L","corner","plant","大盆栽","big potted plant",303,0,40,120,1,"floor","M",0,"",25,40],
+// ---------- RIGHT ----------
+["R","nook","armchair","扶手椅","armchair",68,0,85,85,1,"floor","M",0,"R1",45,80],
+["R","nook","armchair-pillow","靠垫","pillow",68,45,35,30,1,"surface","E",0,"R1"],
+["R","nook","throw-blanket","毯子","throw blanket",48,40,30,35,1,"surface","N",0,"R1"],
+["R","nook","side-table","小边几","side table",128,0,36,55,1,"floor","N",0,"R1",25,36],
+["R","nook","reading-cup","边几咖啡杯","cup on side table",120,55,9,8,1,"surface","N",0,"R1"],
+["R","nook","open-book","摊开的书","open book",136,55,16,4,1,"surface","N",0,"R1"],
+["R","nook","floor-lamp","落地灯","floor lamp",15,0,30,150,1,"floor","N",0,"",25,30],
+["R","nook","smallpot","小盆栽","small pot",128,55,0,0,0,"surface","M",0,""],
+["R","shelf","books","书架+书","wall shelf + books",68,150,100,32,11,"wall","M",1,"R2"],
+["R","shelf","frame","画框","picture frames",68,192,22,26,3,"wall","N",1,"R2"],
+["R","bench","sideboard","矮柜","sideboard (w 160)",230,0,160,90,1,"floor","M",0,"",23,45],
+["R","bench","roaster","烘豆机","roaster",165,90,24,30,1,"surface","M",0,"R3"],
+["R","bench","grinder","磨豆机","grinder",190,90,15,32,1,"surface","M",0,"R3"],
+["R","bench","moka-pot","摩卡壶","moka pot",212,90,11,20,1,"surface","M",0,"R3"],
+["R","bench","french-press","法压壶","french press",234,90,12,22,1,"surface","M",0,"R3"],
+["R","bench","pour-over","手冲壶","pour-over",256,90,13,18,1,"surface","M",0,"R3"],
+["R","bench","milk-frother","打奶器","milk frother",277,90,10,20,1,"surface","M",0,"R3"],
+["R","bench","kettle","细口壶","gooseneck kettle",297,90,18,20,1,"surface","N",0,"R3"],
+["R","bench","scale","电子秤","coffee scale",256,108,14,3,1,"surface","N",0,"R3"],
+["R","bench","filter-box","滤纸盒","filter paper box",165,120,12,8,1,"surface","N",0,"R3"],
+["R","bench","bean-bag","咖啡豆袋","bean bags",305,110,10,16,2,"surface","N",1,"R3"],
+["R","window","sill-pot","窗台小盆","sill pots",230,150,12,14,3,"surface","N",1,"R4"],
+["R","window","smallpot","小盆栽","small pot (moved to sill)",290,150,20,20,1,"surface","M",0,"R4"],
+["R","window","cat-slot","猫(可选)","cat — optional slot",180,150,30,20,0,"surface","N",0,"R4"],
+["R","seating","rug","地毯","rug",165,0,200,2,1,"flat","N",0,"",150,140],
+["R","seating","cafe-table","小圆桌","café table",170,0,60,72,1,"floor","N",0,"",130,60],
+["R","seating","stool","凳子","stools",170,0,34,45,2,"floor","N",1,"",130,34],
+["R","seating","table-cup","桌上杯","cups on table",160,72,9,8,2,"surface","N",1,""],
+["R","seating","cake-plate","蛋糕碟","cake on a plate",182,72,16,7,1,"surface","N",0,""],
+].filter(o=>o[9]>0||o[2]==="cat-slot");
+const Z = { // zoom regions: [wall, id, 中文, English, u0,u1,y0,y1]
+L1:["L","门口","Entrance",0,120,0,190], L2:["L","咖啡机","Espresso station",110,210,88,155],
+L3:["L","糕点柜","Pastry & cups",208,310,88,155], L4:["L","后吧台架","Back-bar shelves",100,215,145,210],
+R1:["R","读书角","Reading nook",5,150,0,100], R2:["R","书架","Bookshelf & frames",10,130,145,225],
+R3:["R","冲煮台","Brewing bench",145,315,86,150], R4:["R","窗台","Window sill",160,315,145,215]};
+const ZONES={L:[["entrance","门口","Entrance",0,110,0,230],["bar","咖啡吧","Coffee bar",110,320,0,95],["backbar","后吧台","Back bar",100,300,145,250],["corner","角落","Corner",285,320,0,130]],
+R:[["nook","读书角","Reading nook",0,145,0,230],["bench","冲煮台","Brewing bench",145,315,0,90],["window","窗","Window",160,310,150,225]]};
+const ZN={entrance:"门口 Entrance",bar:"咖啡吧 Coffee bar",pastry:"糕点柜 Pastry case",backbar:"后吧台 Back bar",corner:"角落 Corner",nook:"读书角 Reading nook",shelf:"书架 Bookshelf",bench:"冲煮台 Brewing bench",window:"窗台 Window sill",seating:"座位 Seating"};
+const S=2.2, W=320, H=250, PAD=40;
+const ns=t=>`<svg viewBox="0 0 ${W*S+PAD*2} ${H*S+PAD*2}" role="img">`;
+const X=u=>PAD+u*S, Y=y=>PAD+(H-y)*S;
+function elev(wall){
+  let s=ns();
+  for(let c=0;c<=W;c+=10)s+=`<line x1="${X(c)}" y1="${Y(0)}" x2="${X(c)}" y2="${Y(H)}" stroke="#eadcc8" stroke-width="${c%50?0.5:1.2}"/>`;
+  for(let c=0;c<=H;c+=10)s+=`<line x1="${X(0)}" y1="${Y(c)}" x2="${X(W)}" y2="${Y(c)}" stroke="#eadcc8" stroke-width="${c%50?0.5:1.2}"/>`;
+  for(let c=0;c<=W;c+=50)s+=`<text x="${X(c)}" y="${Y(0)+16}" font-size="11" text-anchor="middle" fill="#4a2e1f">${c}</text>`;
+  for(let c=50;c<=H;c+=50)s+=`<text x="${X(0)-6}" y="${Y(c)+4}" font-size="11" text-anchor="end" fill="#4a2e1f">${c}</text>`;
+  for(const z of ZONES[wall])s+=`<rect x="${X(z[3])}" y="${Y(z[6])}" width="${(z[4]-z[3])*S}" height="${(z[6]-z[5])*S}" fill="#e6d3bb" opacity=".45"/><text x="${X(z[3])+4}" y="${Y(z[6])+13}" font-size="12" fill="#8a5a3a" font-weight="bold">${z[1]} ${z[2]}</text>`;
+  // architecture
+  if(wall==="L")s+=`<rect x="${X(8)}" y="${Y(210)}" width="${80*S}" height="${210*S}" fill="#dfe6e3" stroke="#4a2e1f" stroke-width="2"/><rect x="${X(16)}" y="${Y(200)}" width="${64*S}" height="${110*S}" fill="#cfdcdc" stroke="#4a2e1f"/><text x="${X(48)}" y="${Y(60)}" font-size="11" text-anchor="middle" fill="#4a2e1f">玻璃门 glass door (background)</text>`;
+  else s+=`<rect x="${X(160)}" y="${Y(225)}" width="${150*S}" height="${75*S}" fill="#dfe6e3" stroke="#4a2e1f" stroke-width="2"/><line x1="${X(235)}" y1="${Y(225)}" x2="${X(235)}" y2="${Y(150)}" stroke="#4a2e1f"/><text x="${X(235)}" y="${Y(212)}" font-size="11" text-anchor="middle" fill="#4a2e1f">窗 window (background)</text>`;
+  const items=O.filter(o=>o[0]===wall).sort((a,b)=>b[7]*b[8]-a[7]*a[8]);
+  for(const o of items){const [,, id, zh, en, u, y, w, h, n,, st]=o; if(!w)continue;
+    const dash=st==="N"?'stroke-dasharray="5 3" stroke="#8a5a3a"':'stroke="#2a1f18"';
+    const small=w<20&&h<20;
+    s+=`<g><title>${zh} ${en} ×${n}</title><rect x="${X(u-w/2)}" y="${Y(y+h)}" width="${w*S}" height="${Math.max(h,2)*S}" rx="3" fill="${st==="N"?"#fff8ee":"#f6e7d2"}" fill-opacity=".85" ${dash} stroke-width="1.6"/>`;
+    s+= small?`<text x="${X(u)}" y="${Y(y+h)-3}" font-size="9" text-anchor="middle" fill="#2a1f18">${zh}${n>1?"×"+n:""}</text>`
+      :`<text x="${X(u)}" y="${Y(y+h/2)+4}" font-size="11" text-anchor="middle" fill="#2a1f18">${zh}${n>1?" ×"+n:""}</text>`;
+    s+=`</g>`;}
+  for(const [k,z] of Object.entries(Z)){if(z[0]!==wall)continue;
+    s+=`<rect x="${X(z[3])}" y="${Y(z[6])}" width="${(z[4]-z[3])*S}" height="${(z[6]-z[5])*S}" fill="none" stroke="#c0603a" stroke-width="2.5" stroke-dasharray="10 4" rx="6"/><text x="${X(z[4])-4}" y="${Y(z[5])-5}" font-size="12" text-anchor="end" fill="#c0603a" font-weight="bold">${k} ${z[1]}</text>`;}
+  s+=`<line x1="${X(0)}" y1="${Y(0)}" x2="${X(W)}" y2="${Y(0)}" stroke="#2a1f18" stroke-width="3"/><text x="${X(W)}" y="${Y(H)-8}" font-size="11" text-anchor="end" fill="#4a2e1f">ceiling 250 cm · wall 320 cm · grid 10 cm</text></svg>`;
+  return s;}
+document.getElementById("elevL").innerHTML=elev("L");
+document.getElementById("elevR").innerHTML=elev("R");
+// zoom notes
+let zh="<h3 style='margin-top:0'>放大区域 Zoom regions</h3><p class='muted'>Click the region → it fills the 1000 px canvas. Zoom = 320 / region width (on top of the base 3.125 px/cm). The smallest item in each region is listed with its size once zoomed.</p><div class='grid2'>";
+for(const [k,z] of Object.entries(Z)){const w=z[4]-z[3],f=(W/w);const it=O.filter(o=>o[13]===k);
+ const mn=it.filter(o=>o[7]).reduce((a,o)=>Math.min(a,o[7],o[8]||99),99);
+ zh+=`<div class="card"><b>${k} · ${z[1]} ${z[2]}</b> — u ${z[3]}–${z[4]}, y ${z[5]}–${z[6]} cm · <b>×${f.toFixed(1)}</b> (${(1000/w).toFixed(1)} px/cm)<br><span class="muted">${it.map(o=>o[3]+(o[9]>1?"×"+o[9]:"")).join(" · ")}</span><br>smallest ≈ ${mn} cm → ${(mn*1000/w).toFixed(0)} px</div>`;}
+document.getElementById("zooms").innerHTML=zh+"</div>";
+// plan
+(function(){const P=1.8,pd=30,R=320;let s=`<svg viewBox="0 0 ${R*P+pd*2} ${R*P+pd*2}" style="max-width:640px;margin:auto">`;
+ const px=v=>pd+v*P;
+ for(let c=0;c<=R;c+=10){s+=`<line x1="${px(c)}" y1="${px(0)}" x2="${px(c)}" y2="${px(R)}" stroke="#eadcc8" stroke-width="${c%50?.5:1}"/><line x1="${px(0)}" y1="${px(c)}" x2="${px(R)}" y2="${px(c)}" stroke="#eadcc8" stroke-width="${c%50?.5:1}"/>`;}
+ s+=`<path d="M${px(115)} ${px(60)} C ${px(130)} ${px(140)}, ${px(160)} ${px(170)}, ${px(205)} ${px(205)}" stroke="#b98a63" stroke-width="14" fill="none" opacity=".35" stroke-linecap="round"/><text x="${px(110)}" y="${px(150)}" font-size="12" fill="#8a5a3a">walkway 动线</text>`;
+ for(const o of O){if(!o[14])continue;const [w,,id,zh,,u,,ww,,n,,st,, ,d,dd]=o;let x,y,a,b;
+  if(w==="L"){x=u-ww/2;y=d-dd/2;a=ww;b=dd;}else{x=R-d-dd/2;y=u-ww/2;a=dd;b=ww;}
+  if(id==="stool"){for(const k of [-40,40]){const cx=w==="L"?u:R-d+k, cy=w==="L"?d:u;s+=`<circle cx="${px(R-d)}" cy="${px(u+k)}" r="${17*P}" fill="#fff8ee" stroke="#8a5a3a" stroke-dasharray="5 3"/>`;}continue;}
+  const round=id==="cafe-table"||id==="side-table"||id==="plant"||id==="floor-lamp"||id==="umbrella-stand";
+  const sty=st==="N"?'stroke="#8a5a3a" stroke-dasharray="5 3"':'stroke="#2a1f18"';
+  const fill=id==="rug"?"#e9c9a8":id==="doormat"?"#d9bf9f":"#f6e7d2";
+  s+= round?`<ellipse cx="${px(x+a/2)}" cy="${px(y+b/2)}" rx="${a/2*P}" ry="${b/2*P}" fill="${fill}" ${sty} stroke-width="1.6" opacity=".95"/>`
+    :`<rect x="${px(x)}" y="${px(y)}" width="${a*P}" height="${b*P}" rx="4" fill="${fill}" ${sty} stroke-width="1.6" opacity="${id==="rug"?.7:.95}"/>`;
+  s+=`<text x="${px(x+a/2)}" y="${px(y+b/2)+4}" font-size="11" text-anchor="middle" fill="#2a1f18">${zh}</text>`;}
+ s+=`<line x1="${px(0)}" y1="${px(0)}" x2="${px(R)}" y2="${px(0)}" stroke="#2a1f18" stroke-width="6"/><line x1="${px(R)}" y1="${px(0)}" x2="${px(R)}" y2="${px(R)}" stroke="#2a1f18" stroke-width="6"/>`;
+ s+=`<line x1="${px(8)}" y1="${px(0)}" x2="${px(88)}" y2="${px(0)}" stroke="#9fc0c0" stroke-width="6"/><path d="M${px(8)} ${px(0)} A ${80*P} ${80*P} 0 0 0 ${px(88)} ${px(80)}" fill="none" stroke="#9fc0c0" stroke-dasharray="4 3"/>`;
+ s+=`<line x1="${px(R)}" y1="${px(160)}" x2="${px(R)}" y2="${px(310)}" stroke="#9fc0c0" stroke-width="6"/>`;
+ s+=`<text x="${px(48)}" y="${px(0)-8}" font-size="12" text-anchor="middle" fill="#4a2e1f">门 door</text><text x="${px(200)}" y="${px(0)-8}" font-size="12" text-anchor="middle" fill="#4a2e1f">左墙 Left wall · 店面 shop front</text><text x="${px(R)+16}" y="${px(160)}" font-size="12" fill="#4a2e1f" transform="rotate(90 ${px(R)+16} ${px(160)})">右墙 Right wall · 座位 seating — 窗 window ${"→"}</text><text x="${px(R)-4}" y="${px(0)+14}" font-size="11" text-anchor="end" fill="#4a2e1f">corner 墙角</text></svg>`;
+ document.getElementById("plan").innerHTML=s;})();
+// table
+const SN={E:"exists",M:"exists · move",N:"new"};
+let t="<tr><th>Zone 区域</th><th>Object 物件</th><th>Carry?</th><th>Count</th><th>Size cm (w×h)</th><th>Mount</th><th>Status</th><th>Generator?</th><th>Zoom</th></tr>";
+const tot={L:{E:0,N:0},R:{E:0,N:0}};
+for(const wall of ["L","R"]){t+=`<tr class="zone"><td colspan="9">${wall==="L"?"左墙 Left wall — shop front & coffee bar":"右墙 Right wall — seating & brewing"}</td></tr>`;let lz="";
+ for(const o of O.filter(o=>o[0]===wall)){const [,z,id,zh,en,,,w,h,n,m,st,g,zm]=o;
+  if(id==="smallpot"&&!w)continue;
+  tot[wall][st==="N"?"N":"E"]+=n;
+  t+=`<tr><td>${z!==lz?ZN[z]:""}</td><td>${zh} <span class="muted">${en}</span> <code>${id}</code></td><td>yes</td><td>${n||"optional"}</td><td>${w}×${h}</td><td>${m}</td><td>${SN[st]}</td><td>${g?"yes (seed/variants)":(n>1?"yes":"—")}</td><td>${zm||"—"}</td></tr>`;lz=z;}}
+document.getElementById("tbl").innerHTML=t;
+const T=w=>tot[w].E+tot[w].N;
+document.getElementById("totals").innerHTML=`<b>Left wall:</b> ${T("L")} stickers (${tot.L.E} exist, ${tot.L.N} new) &nbsp;·&nbsp; <b>Right wall:</b> ${T("R")} stickers (${tot.R.E} exist, ${tot.R.N} new) &nbsp;·&nbsp; <b>Room:</b> ${T("L")+T("R")} (${tot.L.E+tot.R.E} exist incl. the 11 bookshelf stickers moved left → right). <span class="muted">Every listed object can be carried. The door and windows are background, and the cat is not counted.</span>`;
+// order
+let od="";for(const wall of ["L","R"]){od+=`<div><h3>${wall==="L"?"左墙 Left":"右墙 Right"}</h3><ol>`;
+ const zs=[...new Set(O.filter(o=>o[0]===wall).map(o=>o[1]))];
+ for(const z of zs){const it=O.filter(o=>o[0]===wall&&o[1]===z&&o[9]>0&&o[7]).sort((a,b)=>b[7]*b[8]-a[7]*a[8]);
+  od+=`<li><b>${ZN[z]}</b>: ${it.map(o=>o[3]).join(" → ")}</li>`;}
+ od+="</ol></div>";}
+document.getElementById("order").innerHTML=od;
+</script>
+</body></html>
