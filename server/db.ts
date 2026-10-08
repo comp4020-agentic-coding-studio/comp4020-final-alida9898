@@ -60,6 +60,15 @@ export function roomStatus(room: string): { exists: boolean; full: boolean } {
   return { exists: rows.length > 0, full: rows.length >= 2 };
 }
 
+// Both halves' progress, for the finished-house view; a missing half is just empty.
+export function roomHalves(room: string): { left: string[]; right: string[] } | undefined {
+  const rows = db.prepare("SELECT side, placed FROM halves WHERE room = ?").all(room) as { side: Side; placed: string }[];
+  if (!rows.length) return undefined;
+  const out = { left: [] as string[], right: [] as string[] };
+  for (const r of rows) out[r.side] = JSON.parse(r.placed);
+  return out;
+}
+
 // Lets a specific invite link join the room it names, instead of the random
 // matchmaking in join() — so you can bring a specific person in rather than
 // whoever else happens to be waiting.

@@ -22,6 +22,7 @@ const TEXT = {
     where: { left: "你在拼：店门口和柜台", right: "你在拼：里屋的座位" },
     hintDrag: "把贴纸揭下来，对准淡淡的轮廓贴上去；想先拼哪个都行，数字只是建议顺序",
     hintDone: "拼完啦。隔壁那一半，也有人在慢慢拼。",
+    house: "走进这间屋子看看 →",
     stickerAlt: (n) => `第 ${n} 张贴纸`,
     inviteLine: "对面还没人 —— 把这条链接发给搭子，邀请对方来拼另一半：",
     copy: "复制",
@@ -33,6 +34,7 @@ const TEXT = {
     where: { left: "You're building: the shop front and counter", right: "You're building: the seating inside" },
     hintDrag: "Peel a sticker off and line it up with the faint outline — pick any one, the numbers are just a suggested order",
     hintDone: "All done. Someone's slowly building the other half too.",
+    house: "Step into the room →",
     stickerAlt: (n) => `Sticker ${n}`,
     inviteLine: "No one on the other side yet — send this link to a friend to invite them:",
     copy: "Copy",
@@ -133,6 +135,10 @@ function render() {
   const done = placedSet.size >= stickers.length;
   $("hint").textContent = TEXT[lang][done ? "hintDone" : "hintDrag"];
   document.body.classList.toggle("done", done);
+  // the 3D room is the reward, so it only appears once this half is finished
+  $("house-link").hidden = !done;
+  $("house-link").href = `/house/${token}`;
+  $("house-link").textContent = TEXT[lang].house;
 
   sheet.replaceChildren();
   stickers.forEach((s, i) => {

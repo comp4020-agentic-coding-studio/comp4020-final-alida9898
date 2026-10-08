@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile, writeFile } from "node:fs/promises";
 import { extname, join as pathJoin, normalize } from "node:path";
 import { marked } from "marked";
-import { half, join, joinRoom, place, roomStatus } from "./db.ts";
+import { half, join, joinRoom, place, roomHalves, roomStatus } from "./db.ts";
 
 const STICKERS_PATH = "assets/stickers.json";
 const manifest = JSON.parse(await readFile(STICKERS_PATH, "utf8"));
@@ -85,6 +85,10 @@ const server = createServer(async (req, res) => {
     if ((m = p.match(/^\/api\/rooms\/([\w-]+)\/status$/)) && req.method === "GET") {
       return json(res, 200, roomStatus(m[1]));
     }
+    if ((m = p.match(/^\/api\/rooms\/([\w-]+)$/)) && req.method === "GET") {
+      const r = roomHalves(m[1]);
+      return r ? json(res, 200, r) : json(res, 404, { error: "unknown room" });
+    }
     if ((m = p.match(/^\/api\/s\/([\w-]+)$/)) && req.method === "GET") {
       const h = half(m[1]);
       return h ? json(res, 200, { side: h.side, placed: h.placed, room: h.room }) : json(res, 404, { error: "unknown link" });
@@ -126,6 +130,9 @@ const server = createServer(async (req, res) => {
     if (p === "/manifest.json") return json(res, 200, manifest);
     if ((m = p.match(/^\/s\/([\w-]+)$/))) {
       return half(m[1]) ? file(res, "public", "side.html") : send(res, 404, "这条链接不存在");
+    }
+    if ((m = p.match(/^\/house\/([\w-]+)$/))) {
+      return half(m[1]) ? file(res, "public", "house.html") : send(res, 404, "这条链接不存在");
     }
     if (p === "/") return file(res, "public", "index.html");
     return file(res, "public", p.slice(1));

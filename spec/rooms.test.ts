@@ -85,3 +85,24 @@ it("an invite link for an unknown room is a 404", async () => {
   expect((await post("/api/rooms/not-a-real-room/join")).status).toBe(404);
   expect(await (await api("/api/rooms/not-a-real-room/status")).json()).toEqual({ exists: false, full: false });
 });
+
+it("a room returns both halves' placed stickers, and an unknown room is a 404", async () => {
+  let a = await (await post("/api/join")).json();
+  if (!a.opened) a = await (await post("/api/join")).json();
+  const b = await (await post("/api/join")).json();
+  const manifest = await (await api("/manifest.json")).json();
+  const first = manifest.sides[a.side].find((s: { bg?: boolean }) => !s.bg);
+  await post(`/api/s/${a.token}/place`, { id: first.id });
+
+  const room = await (await api(`/api/rooms/${a.room}`)).json();
+  expect(room[a.side]).toEqual([first.id]);
+  expect(room[b.side]).toEqual([]);
+  expect((await api("/api/rooms/not-a-real-room")).status).toBe(404);
+});
+
+it("the house page is served for a half's link", async () => {
+  const { token } = await (await post("/api/join")).json();
+  const res = await api(`/house/${token}`);
+  expect(res.status).toBe(200);
+  expect(await res.text()).toContain("<canvas id=\"house\"");
+});
