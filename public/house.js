@@ -310,7 +310,7 @@ const CENTER_Y = WALL_H * 0.42; // a touch low: floor things stand out toward yo
 const views = {
   corner: () => {
     const fit = Math.max(1, 1.25 / camera.aspect);
-    return { pos: new THREE.Vector3(16, 0, 16).multiplyScalar(fit).setY(7.5 + fit), target: new THREE.Vector3(3.2, 2.6, 3.2) };
+    return { pos: new THREE.Vector3(16, 0, 16).multiplyScalar(fit).setY(7.5 + fit), target: new THREE.Vector3(3.2, 1.9, 3.2) };
   },
   left: () => ({ pos: new THREE.Vector3(faceDist(), CENTER_Y, WALL / 2), target: new THREE.Vector3(0, CENTER_Y, WALL / 2) }),
   right: () => ({ pos: new THREE.Vector3(WALL / 2, CENTER_Y, faceDist()), target: new THREE.Vector3(WALL / 2, CENTER_Y, 0) }),
