@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>小镇一角 · 咖啡馆</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body class="house">
+    <header class="bar">
+      <button id="lang-toggle" class="lang-toggle bar-toggle" type="button" aria-label="Switch language">EN</button>
+      <a href="/" class="brand" id="brand">小镇一角</a>
+      <span id="place" class="small"></span>
+    </header>
+    <canvas id="house"></canvas>
+    <nav class="views">
+      <button data-view="overview" type="button"></button>
+      <button data-view="level-0" type="button"></button>
+      <button data-view="level-1" type="button"></button>
+    </nav>
+    <script type="module" src="/cafe.js"></script>
+  </body>
+</html>
