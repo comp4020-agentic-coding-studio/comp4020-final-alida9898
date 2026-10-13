@@ -33,3 +33,47 @@ body.town { --sky: #f6ecdc; }
   .tcard { left: 12px; width: calc(100% - 24px); }
 }
 @media (prefers-reduced-motion: reduce) { .tcard.season { transition: none; } }
+
+/* the noticeboard: a little wooden board on a post with a pinned cream card */
+.nboard {
+  position: absolute; z-index: 16; right: 16px; top: 14px; width: min(15rem, calc(100% - 32px)); box-sizing: border-box;
+  background: #c79a6b; border: 3px solid #8a5a3b; border-radius: 14px; padding: 8px 10px 10px;
+  box-shadow: inset 0 -4px 0 rgba(74, 46, 31, 0.18), 0 6px 0 rgba(138, 90, 59, 0.2), 0 10px 22px rgba(74, 46, 31, 0.16);
+}
+.nboard::after {                        /* the post */
+  content: ""; position: absolute; left: 50%; bottom: -16px; width: 10px; height: 14px; margin-left: -5px;
+  background: #8a5a3b; border-radius: 0 0 4px 4px;
+}
+.nboard.owner { cursor: pointer; }
+.nboard.owner:focus-visible { outline: 3px solid var(--stitch); outline-offset: 3px; }
+.nboard-title { margin: 0 0 5px; font-size: 0.78rem; color: #fbf3e2; text-align: center; letter-spacing: 0.08em; }
+.nboard-pin { position: absolute; left: 50%; top: 30px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: #d9644a; box-shadow: 0 2px 0 rgba(74, 46, 31, 0.3); z-index: 1; }
+.nboard-note {
+  margin: 0; background: #fbf3e2; color: #4a2e1f; border-radius: 10px; padding: 12px 12px 10px; font-size: 1rem; line-height: 1.4;
+  transform: rotate(-1.2deg); box-shadow: 0 3px 0 rgba(74, 46, 31, 0.15); overflow-wrap: anywhere;
+}
+.nboard-note.empty { color: var(--ink-soft); }
+.nboard.owner .nboard-note.empty { font-size: 0.86rem; border: 2px dashed var(--stitch); }
+.nboard-editor { margin-top: 10px; background: var(--card); border-radius: 10px; padding: 8px; cursor: default; }
+.nboard-editor label { display: block; margin-bottom: 4px; }
+.nboard-field { display: flex; align-items: center; gap: 6px; }
+.nboard-field input {
+  flex: 1; min-width: 0; font: inherit; font-size: 0.9rem; color: var(--ink); background: var(--paper);
+  border: 1.5px solid rgba(138, 90, 59, 0.4); border-radius: 8px; padding: 0.35em 0.5em;
+}
+.nboard-count { color: var(--ink-soft); white-space: nowrap; }
+.nboard-count.over { color: #b5452e; }
+.nboard-presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.nboard-preset {
+  font: inherit; font-size: 0.74rem; text-align: left; color: var(--ink); background: var(--paper-2);
+  border: 1.5px dashed var(--stitch); border-radius: 12px; padding: 0.2em 0.6em; cursor: pointer;
+}
+.nboard-msg { margin: 4px 0 0; min-height: 1em; color: #b5452e; }
+.nboard-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
+.nboard-btn { font: inherit; font-size: 0.8rem; color: var(--card); background: var(--stitch); border: 0; border-radius: 8px; padding: 0.3em 0.8em; cursor: pointer; }
+.nboard-btn.ghost { color: var(--ink-soft); background: transparent; border: 1.5px solid rgba(138, 90, 59, 0.35); }
+.nboard-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+@media (max-width: 700px) {
+  /* stack under the invite / guest card */
+  .nboard { right: 12px; left: 12px; width: auto; top: auto; position: absolute; }
+}

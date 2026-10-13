@@ -17,6 +17,11 @@ const TEXT = {
     bad: "这个小镇的链接好像不对，", badHome: "回到首页", missing: "没有找到这个小镇，",
     trouble: "小镇暂时没打开，过一会儿刷新试试。",
     seasonCard: (s) => `${s}到了，小镇换了颜色`, seasonClose: "点一下就关上",
+    boardTitle: "留言板", boardDefault: "欢迎来我的小镇，随便帮我摆几件吧～", boardEmptyOwner: "点这里给朋友留句话",
+    boardEdit: "写一句给朋友的话", boardSave: "贴上去", boardClear: "撕掉", boardCancel: "算了",
+    boardSaving: "正在贴……", boardFail: "没贴上，再试一次", boardTooLong: "最多 40 个字",
+    presets: ["想请你帮我把甜点柜摆满～", "二楼读书角还空着，来坐坐吧", "院子里的花还没种，帮我一把？", "随便摆，摆哪件都好 ☕", "今天有点忙，谢谢你来帮忙！"],
+    flagGuest: "朋友想请你帮这家店", flagOwner: "你请朋友帮这家店",
   },
   en: {
     brand: "A Corner of Town", toggle: "中文", pageTitle: "A Corner of Town · My town",
@@ -30,6 +35,11 @@ const TEXT = {
     bad: "This town link doesn't look right — ", badHome: "go home", missing: "This town couldn't be found — ",
     trouble: "The town didn't open just now. Try refreshing in a moment.",
     seasonCard: (s) => `${s} is here — the town has new colours`, seasonClose: "Tap to close",
+    boardTitle: "Noticeboard", boardDefault: "Welcome to my town — place anything you like!", boardEmptyOwner: "Tap to leave your friends a note",
+    boardEdit: "A note for your friends", boardSave: "Pin it", boardClear: "Take down", boardCancel: "Cancel",
+    boardSaving: "Pinning…", boardFail: "Didn't pin — try again", boardTooLong: "40 characters at most",
+    presets: ["Could you help fill my pastry case?", "The upstairs reading nook is still empty — come sit", "The yard's flowers aren't planted yet — help me out?", "Place anything you like ☕", "Busy day — thanks for dropping by!"],
+    flagGuest: "Your friend asked for help here", flagOwner: "You asked friends to help here",
   },
 };
 const LANG_KEY = "lang", HELPER_KEY = "town-helper-v1";
@@ -74,13 +84,14 @@ function streetShops() {
   const t = T();
   return TYPES.map((type) => {
     const s = data?.shops?.find((x) => x.type === type);
-    return { type, label: t.names[type], tag: type === "cafe" ? "" : t.preview, meta: s ? t.placed(s.placed) : "" };
+    const flag = s?.requests?.length ? (data.role === "guest" ? t.flagGuest : t.flagOwner) : "";
+    return { type, label: t.names[type], tag: type === "cafe" ? "" : t.preview, meta: s ? t.placed(s.placed) : "", flag };
   });
 }
 const street = await createStreet($("street"), {
   season, lang, shops: streetShops(),
   // keep the shops clear of the invite / guest card along the top
-  padTop: () => Math.max(...["invite-card", "guest-card"].map((id) => { const el = $(id); return el.hidden ? 0 : el.offsetTop + el.offsetHeight; })),
+  padTop: () => Math.max(...["invite-card", "guest-card", "board"].map((id) => { const el = $(id); return el.hidden ? 0 : el.offsetTop + el.offsetHeight; })),
   onPick: (type) => { if (!failure && world && token) location.href = shopHref(type); },
 });
 
@@ -116,6 +127,7 @@ function render() {
     $("invite-link").value = inviteLink;
     if ($("invite-copy").textContent !== t.copied) $("invite-copy").textContent = t.copy;
   }
+  renderBoard();
   if (!$("season-card").hidden) {
     $("season-title").textContent = t.seasonCard(SEASON_NAME[season][lang]);
     $("season-close").textContent = t.seasonClose;
@@ -134,6 +146,71 @@ $("invite-copy").addEventListener("click", async (e) => {
   setTimeout(() => { btn.textContent = T().copy; }, 1400);
 });
 $("invite-link").addEventListener("focus", (e) => e.currentTarget.select());
+
+// ---- the noticeboard: one owner note (≤ 40 code points); guests read it --------
+const MAX_NOTE = 40;
+const cps = (str) => [...str].length;
+let note = data?.note || "";
+function renderBoard() {
+  const t = T(), board = $("board");
+  board.hidden = !data;
+  if (!data) return;
+  $("board-title").textContent = t.boardTitle;
+  const card = $("board-note");
+  card.textContent = note || (guest ? t.boardDefault : t.boardEmptyOwner);
+  card.classList.toggle("empty", !note);
+  board.classList.toggle("owner", !guest);
+  if (guest) { board.removeAttribute("role"); board.removeAttribute("tabindex"); }
+  else { board.setAttribute("role", "button"); board.tabIndex = 0; board.setAttribute("aria-label", t.boardEdit); }
+  placeBoard();
+  const ed = $("board-editor");
+  if (!ed.hidden) {
+    $("board-edit-title").textContent = t.boardEdit;
+    $("board-save").textContent = t.boardSave; $("board-clear").textContent = t.boardClear; $("board-cancel").textContent = t.boardCancel;
+    const pre = $("board-presets"); pre.replaceChildren();
+    for (const p of t.presets) {
+      const b = document.createElement("button"); b.type = "button"; b.className = "nboard-preset"; b.textContent = p;
+      b.addEventListener("click", () => { $("board-input").value = [...p].slice(0, MAX_NOTE).join(""); countNote(); $("board-input").focus(); });
+      pre.append(b);
+    }
+    countNote();
+  }
+}
+/** Phone width: the board stacks under whichever top card is showing. */
+function placeBoard() {
+  const top = ["invite-card", "guest-card"].map($).find((el) => !el.hidden);
+  $("board").style.top = innerWidth <= 700 && top ? `${top.offsetTop + top.offsetHeight + 10}px` : "";
+}
+addEventListener("resize", placeBoard);
+function countNote() {
+  const n = cps($("board-input").value), over = n > MAX_NOTE;
+  $("board-count").textContent = `${n} / ${MAX_NOTE}`;
+  $("board-count").classList.toggle("over", over);
+  $("board-save").disabled = over;
+  $("board-msg").textContent = over ? T().boardTooLong : "";
+}
+function openEditor() {
+  if (guest || !data) return;
+  $("board-editor").hidden = false; $("board-input").value = note; renderBoard(); $("board-input").focus();
+}
+const closeEditor = () => { $("board-editor").hidden = true; $("board-msg").textContent = ""; };
+async function saveNote(text) {
+  if (cps(text) > MAX_NOTE) return countNote();
+  $("board-msg").textContent = T().boardSaving;
+  try {
+    const res = await fetch(`/api/worlds/${world}/note`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ t: token, text }) });
+    if (!res.ok) throw new Error(String(res.status));
+    note = (await res.json()).note || "";
+    closeEditor(); renderBoard();
+  } catch { $("board-msg").textContent = T().boardFail; }
+}
+$("board").addEventListener("click", (e) => { if (!e.target.closest("#board-editor")) openEditor(); });
+$("board").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === $("board")) { e.preventDefault(); openEditor(); } });
+$("board-input").addEventListener("input", countNote);
+$("board-input").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveNote($("board-input").value.trim()); } if (e.key === "Escape") closeEditor(); });
+$("board-save").addEventListener("click", () => saveNote($("board-input").value.trim()));
+$("board-clear").addEventListener("click", () => saveNote(""));
+$("board-cancel").addEventListener("click", closeEditor);
 
 // ---- a new season: the same "seen" key as the play page. The town only reads it
 // (the café's card, with its item count, still shows once inside); here it shows

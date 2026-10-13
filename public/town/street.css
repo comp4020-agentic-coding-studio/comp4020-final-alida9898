@@ -43,3 +43,6 @@
   .street-bubble.pop .say { animation: none; }
   .street-bubble.out .say, .street-label { transition: none; }
 }
+.street-label .sflag { display: inline-block; margin-left: 4px; font-size: 0.8rem; transform-origin: 20% 100%; animation: flag-wave 2.4s ease-in-out infinite; }
+@keyframes flag-wave { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+@media (prefers-reduced-motion: reduce) { .street-label .sflag { animation: none; } }

@@ -37,6 +37,25 @@
           <button id="invite-copy" class="invite-copy" type="button"></button>
         </div>
       </section>
+      <section id="board" class="nboard" hidden>
+        <span class="nboard-pin" aria-hidden="true"></span>
+        <p id="board-title" class="nboard-title"></p>
+        <p id="board-note" class="nboard-note" aria-live="polite"></p>
+        <div id="board-editor" class="nboard-editor" hidden>
+          <label id="board-edit-title" for="board-input" class="small"></label>
+          <div class="nboard-field">
+            <input id="board-input" type="text" autocomplete="off" />
+            <span id="board-count" class="nboard-count small"></span>
+          </div>
+          <div id="board-presets" class="nboard-presets"></div>
+          <p id="board-msg" class="nboard-msg small" role="status"></p>
+          <div class="nboard-actions">
+            <button id="board-cancel" type="button" class="nboard-btn ghost"></button>
+            <button id="board-clear" type="button" class="nboard-btn ghost"></button>
+            <button id="board-save" type="button" class="nboard-btn"></button>
+          </div>
+        </div>
+      </section>
       <div id="season-card" class="tcard season" role="dialog" hidden>
         <p id="season-title" class="tcard-title"></p>
         <p id="season-close" class="small"></p>

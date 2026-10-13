@@ -4,7 +4,7 @@
 // and the town page (/w/<world>).
 //
 //   const street = await createStreet(container, { season, lang, shops, onPick });
-//   shops: [{ type, label, meta?, tag? }] — label text under each shop
+//   shops: [{ type, label, meta?, tag?, flag? }] (flag: help-request tooltip text) — label text under each shop
 //   onPick(type) — a shop was clicked (or tapped twice on touch)
 //   padTop — px at the top of the container covered by other UI; framing keeps shops below it
 //   street.setShops(shops) · street.setLang(lang) · street.destroy()
@@ -257,6 +257,8 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
       if (!s) continue;
       const n = document.createElement("span"); n.className = "sname"; n.textContent = s.label;
       if (s.tag) { const t = document.createElement("span"); t.className = "stag"; t.textContent = s.tag; n.append(t); }
+      if (s.flag) { const f = document.createElement("span"); f.className = "sflag"; f.textContent = "🚩"; f.title = s.flag; f.setAttribute("aria-label", s.flag); n.append(f); }
+      b.title = s.flag || "";
       b.append(n);
       if (s.meta) { const m = document.createElement("span"); m.className = "smeta"; m.textContent = s.meta; b.append(m); }
     }
