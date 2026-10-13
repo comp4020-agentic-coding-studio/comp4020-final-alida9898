@@ -250,7 +250,48 @@ function viewBox(v) {
     b.intersect(zb);
     return b.isEmpty() ? zb : b;
   }
-  return itemBox(v.id);
+  return topOf(v.id)?.box ?? itemBox(v.id);
+}
+/** The piece's own box, without the items that sit on / in it. */
+function ownBox(id) {
+  const b = new THREE.Box3(), o = items.get(id).obj;
+  o.updateWorldMatrix(true, true);
+  const walk = (n) => {
+    if (n !== o && n.userData.item) return;
+    if (n.isMesh) {
+      if (!n.geometry.boundingBox) n.geometry.computeBoundingBox();
+      b.union(n.geometry.boundingBox.clone().applyMatrix4(n.matrixWorld));
+    }
+    for (const c of n.children) walk(c);
+  };
+  walk(o);
+  return b;
+}
+/**
+ * If a focus piece holds its things on one horizontal surface above 40 cm (a counter, a table, a sideboard, a case),
+ * all within about one level (not tiers of a bookcase, not decals spread up a board),
+ * the box to frame (the top + what's on it) — else null (things hung on a face or on several tiers).
+ */
+function topOf(id) {
+  const it = items.get(id);
+  let out = null;
+  const kids = it.children.map((c) => items.get(c)).filter((k) => !(k.season && !isYard(it.level)));
+  if (kids.length) {
+    const own = ownBox(id), floor = isYard(it.level) ? 0 : levelY(it.level);
+    const bots = kids.map((k) => { k.obj.updateWorldMatrix(true, false); return new THREE.Box3().setFromObject(k.obj); });
+    const lows = bots.map((b) => b.min.y);
+    const lo = Math.min(...lows), hi = Math.max(...lows);
+    const inside = bots.every((b) => { const c = b.getCenter(new THREE.Vector3()); return c.x > own.min.x - 8 && c.x < own.max.x + 8 && c.z > own.min.z - 8 && c.z < own.max.z + 8; });
+    // against a wall, only things on its very top count (a wall shelf holds them on boards under its frame)
+    const onTop = lo > own.max.y - 15 || !wallOf(id);
+    if (lo - floor > 40 && hi - lo < 25 && inside && onTop) {
+      const box = new THREE.Box3(new THREE.Vector3(own.min.x, lo - 6, own.min.z), new THREE.Vector3(own.max.x, lo, own.max.z));
+      for (const b of bots) box.union(b);
+      const c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());
+      out = { box: new THREE.Box3().setFromCenterAndSize(c, sz.max(new THREE.Vector3(70, 30, 50)).multiplyScalar(1.05)) };
+    }
+  }
+  return out;
 }
 // a front-ish 3/4 angle that looks a little more down the closer you get
 // kept low so the room reads like a stage seen from the front, not a floor plan
@@ -386,7 +427,8 @@ function frame(v, zoomOut = 1, at = path.indexOf(v)) {
       ? zoneItems(v.level, v.zone).filter((it) => it.layer === 1 && (isYard(v.level) || !it.season)).map((it) => new THREE.Box3().setFromObject(it.obj).getCenter(new THREE.Vector3()))
       : [];
     // a wall piece is a front elevation: square to its wall, at its own height, nothing to search
-    const wall = v.kind === "item" ? wallOf(v.id) : null;
+    const top = v.kind === "item" && topOf(v.id);
+    const wall = v.kind === "item" && !top ? wallOf(v.id) : null;
     if (wall) {
       const dir = WALL_DIR[wall].clone();
       best = { score: 0, dir, d: fitDistance(v, box, dir), occ: 0 };
@@ -394,7 +436,8 @@ function frame(v, zoomOut = 1, at = path.indexOf(v)) {
     const flip = fromLeft(v, c) ? -1 : 1;
     for (const [ei, del] of best ? [] : EL_STEPS.entries()) {
       for (const [ai, daz] of AZ_STEPS.entries()) {
-        const az = THREE.MathUtils.clamp(az0 + flip * daz, deg(-80), deg(80)), el = el0 + del;
+        // a top surface is looked down on from the front, so its things are seen from above, not edge-on
+        const az = THREE.MathUtils.clamp(az0 + flip * daz, deg(-80), deg(80)), el = (top ? deg(40) : el0) + del;
         const dir = dirFrom(az, el);
         const d = Math.min(fitDistance(v, box, dir), parentD);
         const p = c.clone().addScaledVector(dir, d);
@@ -1221,7 +1264,7 @@ applyCut();
 { const f = frame(view()); camera.position.copy(f.p); look.copy(f.t); }
 renderUI();
 // read-only handle for poking at the page from devtools, only with ?debug
-if (debug) globalThis.__play = { held, camera, free: () => free, items, placed, spot: (id) => spotOnScreen(items.get(id)), path: () => path, go, frame };
+if (debug) globalThis.__play = { held, camera, free: () => free, items, placed, spot: (id) => spotOnScreen(items.get(id)), path: () => path, go, frame, topOf, wallOf };
 // ---- a new season: one gentle card the first time this viewer sees it ---------
 const seasonItems = [...items.values()].filter((it) => it.season === season);
 let lastSeen = null;
