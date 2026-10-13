@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { createShop, getShop, getWorld, ITEM_RE, openShop, placeAsGuest, placeItem, quota, shopWorld, type GuestPlaceResult } from "./db.ts";
+import { createShop, getShop, getWorld, ITEM_RE, openShop, placeAsGuest, placeItem, quota, REQUEST_ID_RE, REQUEST_SCOPES, setRequest, shopRequests, shopWorld, type GuestPlaceResult } from "./db.ts";
 import { canberraDay } from "./season.ts";
 
 // In-memory live state per shop: open SSE streams and what each client holds.
@@ -16,7 +16,7 @@ const room = (shop: string) => {
 };
 const present = (shop: string) => new Set(rooms.get(shop)?.streams.values()).size;
 const write = (res: ServerResponse, event: string, data: unknown) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-const broadcast = (shop: string, event: string, data: unknown) => {
+export const broadcast = (shop: string, event: string, data: unknown) => {
   for (const res of rooms.get(shop)?.streams.keys() ?? []) write(res, event, data);
 };
 
@@ -45,7 +45,7 @@ export async function handleShops(req: IncomingMessage, res: ServerResponse, p: 
   }
   if ((m = p.match(/^\/api\/shops\/([\w-]+)$/)) && req.method === "GET") {
     const s = getShop(m[1]);
-    s ? json(res, 200, { ...s, present: present(m[1]) }) : json(res, 404, { error: "unknown_shop" });
+    s ? json(res, 200, { ...s, ...(shopWorld(m[1]) && { requests: shopRequests(m[1]) }), present: present(m[1]) }) : json(res, 404, { error: "unknown_shop" });
     return true;
   }
   if ((m = p.match(/^\/api\/shops\/([\w-]+)\/place$/)) && req.method === "POST") {
@@ -88,6 +88,29 @@ export async function handleShops(req: IncomingMessage, res: ServerResponse, p: 
       const status = { unknown_shop: 404, bad_item: 400, taken: 409, full: 409, quota_today: 429, too_many_worlds: 429 }[r.reason];
       json(res, status, q && status === 429 ? { error: r.reason, quota: q } : { error: r.reason });
     }
+    return true;
+  }
+  if ((m = p.match(/^\/api\/shops\/([\w-]+)\/requests$/)) && req.method === "POST") {
+    const shop = m[1];
+    const { t, scope, id, on } = await body(req);
+    if (!getShop(shop)) return json(res, 404, { error: "unknown_shop" }), true;
+    const sw = shopWorld(shop);
+    if (!sw) return json(res, 400, { error: "no_world" }), true;
+    if (t !== getWorld(sw.world)!.owner_token) {
+      log(`${shop} (world ${sw.world}/${sw.type}) request change -> forbidden`);
+      return json(res, 403, { error: "forbidden" }), true;
+    }
+    if (typeof scope !== "string" || !(REQUEST_SCOPES as readonly string[]).includes(scope)) return json(res, 400, { error: "bad_scope" }), true;
+    if (typeof id !== "string" || !REQUEST_ID_RE.test(id)) return json(res, 400, { error: "bad_id" }), true;
+    if (typeof on !== "boolean") return json(res, 400, { error: "bad_on" }), true;
+    const r = setRequest(shop, scope, id, on);
+    if (!r.ok) {
+      log(`${shop} (world ${sw.world}/${sw.type}) request ${scope}:${id} on -> too_many`);
+      return json(res, 409, { error: "too_many" }), true;
+    }
+    log(`${shop} (world ${sw.world}/${sw.type}) request ${scope}:${id} ${on ? "on" : "off"} (${r.requests.length} total)`);
+    broadcast(shop, "requests", { requests: r.requests });
+    json(res, 200, { requests: r.requests });
     return true;
   }
   if ((m = p.match(/^\/api\/shops\/([\w-]+)\/hold$/)) && req.method === "POST") {

@@ -78,7 +78,7 @@ const server = createServer(async (req, res) => {
   let m: RegExpMatchArray | null;
   try {
     if (p.startsWith("/api/shops") && (await handleShops(req, res, p, url, json, body))) return;
-    if ((p.startsWith("/api/worlds") || p === "/api/season") && handleWorlds(req, res, p, url, json)) return;
+    if ((p.startsWith("/api/worlds") || p === "/api/season") && (await handleWorlds(req, res, p, url, json, body))) return;
     if (req.method === "POST" && p === "/api/join") return json(res, 200, join());
     if ((m = p.match(/^\/api\/rooms\/([\w-]+)\/join$/)) && req.method === "POST") {
       const result = joinRoom(m[1]);

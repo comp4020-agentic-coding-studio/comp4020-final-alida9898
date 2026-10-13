@@ -294,3 +294,57 @@ export function placeAsGuest(shop: string, world: string, item: string, helper: 
     throw e;
   }
 }
+
+// ---- noticeboard + help requests (owner-set hints for friends; never restrict placing) ----
+db.exec(`
+  CREATE TABLE IF NOT EXISTS help_requests (
+    shop TEXT NOT NULL REFERENCES shops(id),
+    scope TEXT NOT NULL,
+    id TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    PRIMARY KEY (shop, scope, id)
+  );
+`);
+{
+  const cols = new Set((db.prepare("PRAGMA table_info(worlds)").all() as { name: string }[]).map((c) => c.name));
+  if (!cols.has("note")) db.exec("ALTER TABLE worlds ADD COLUMN note TEXT");
+}
+
+export const NOTE_MAX = 40;
+export const REQUESTS_MAX = 50;
+export const REQUEST_SCOPES = ["zone", "piece", "item"] as const;
+export const REQUEST_ID_RE = /^[a-z0-9-]{1,64}$/;
+export type HelpRequest = { scope: string; id: string };
+
+export function worldNote(world: string): string | null {
+  return (db.prepare("SELECT note FROM worlds WHERE id = ?").get(world) as { note: string | null } | undefined)?.note ?? null;
+}
+
+export function setWorldNote(world: string, text: string): string | null {
+  const note = text === "" ? null : text;
+  db.prepare("UPDATE worlds SET note = ? WHERE id = ?").run(note, world);
+  return note;
+}
+
+export function shopRequests(shop: string): HelpRequest[] {
+  return (db.prepare("SELECT scope, id FROM help_requests WHERE shop = ? ORDER BY created_at, scope, id").all(shop) as HelpRequest[]).map(
+    (r) => ({ scope: r.scope, id: r.id }),
+  );
+}
+
+export function setRequest(shop: string, scope: string, id: string, on: boolean): { ok: true; requests: HelpRequest[] } | { ok: false } {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (on) {
+      const exists = db.prepare("SELECT 1 FROM help_requests WHERE shop = ? AND scope = ? AND id = ?").get(shop, scope, id);
+      const n = (db.prepare("SELECT count(*) AS n FROM help_requests WHERE shop = ?").get(shop) as { n: number }).n;
+      if (!exists && n >= REQUESTS_MAX) return db.exec("ROLLBACK"), { ok: false };
+      db.prepare("INSERT OR IGNORE INTO help_requests (shop, scope, id) VALUES (?, ?, ?)").run(shop, scope, id);
+    } else db.prepare("DELETE FROM help_requests WHERE shop = ? AND scope = ? AND id = ?").run(shop, scope, id);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+  return { ok: true, requests: shopRequests(shop) };
+}

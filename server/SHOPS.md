@@ -53,8 +53,10 @@ unguessable tokens decide the role. **owner** token → unlimited placing;
 | Method & path | Body | Success | Errors |
 |---|---|---|---|
 | `POST /api/worlds` | – | 200 `{ world, owner, guest, shops: { cafe, flower, book, bakery } }` (shop ids) | |
-| `GET /api/worlds/<id>?t=<token>&helper=<id>` | – | 200 `{ world, role: "owner"\|"guest", guestToken (owner only), season, shops: [{ type, shop, placed: n }], quota: { left, worldsLeft } (guest only) }`. `shops` is in the order cafe, flower, book, bakery. `helper` required for guests. | 403 `{ error: "forbidden" }` (bad/missing token), 404 `{ error: "unknown_world" }`, 400 `bad_helper` |
+| `GET /api/worlds/<id>?t=<token>&helper=<id>` | – | 200 `{ world, role: "owner"\|"guest", guestToken (owner only), season, note: string\|null, shops: [{ type, shop, placed: n, requests: [{ scope, id }] }], quota: { left, worldsLeft } (guest only) }`. `shops` is in the order cafe, flower, book, bakery. `helper` required for guests. | 403 `{ error: "forbidden" }` (bad/missing token), 404 `{ error: "unknown_world" }`, 400 `bad_helper` |
 | `POST /api/shops/<shop>/place` (world shop) | `{ item, client, t, helper? }` (`helper` defaults to `client`) | 200 `{ placed: true }` for owner; `{ placed: true, quota: { left, worldsLeft } }` for guest (after this placement) | 403 `forbidden` (bad/missing `t`), 429 `{ error: "quota_today", quota }`, 429 `{ error: "too_many_worlds", quota }`, plus the shop errors above. 409 `taken`/`full` never use quota. |
+| `PUT /api/worlds/<id>/note` | `{ t, text }` (owner token; trimmed; `""` clears) | 200 `{ note: string\|null }` | 403 `forbidden` (not owner), 400 `{ error: "too_long" }` (> 40 code points), 400 `bad_text`, 404 `unknown_world` |
+| `POST /api/shops/<shop>/requests` | `{ t, scope: "zone"\|"piece"\|"item", id, on: boolean }` (owner token of the shop's world) | 200 `{ requests: [{ scope, id }] }` (whole set after the change; idempotent) | 403 `forbidden`, 400 `bad_scope` / `bad_id` / `bad_on`, 400 `{ error: "no_world" }` (legacy shop), 404 `unknown_shop`, 409 `{ error: "too_many" }` (> 50 per shop) |
 | `GET /api/season` | – | 200 `{ season, since: "YYYY-MM-DD" }` (first day of the current season) | |
 | `GET /w/<world>` | – | `public/town.html` | 404 |
 | `GET /w/<world>/<type>` | – | `public/play.html` | 404 |
@@ -64,3 +66,13 @@ world); `quota.worldsLeft` = worlds this helper may still *start* helping today.
 The page reads the token from its own link (e.g. `/w/<world>?t=<token>`) and
 sends it as `t`. Hold and SSE (`/api/shops/<shop>/events`) are unchanged and need
 no token; the `placed` event never carries quota.
+
+**Noticeboard & help requests.** A world has one owner note (≤ 40 Unicode
+code points, so each Chinese character counts once). Each world shop has a set
+of help requests `{ scope, id }`: `zone` (whole zone), `piece` (a focus piece and
+what sits on it), `item` (one item). `id` is a client-side scene id,
+`^[a-z0-9-]{1,64}$`; the server only stores it. Requests are hints — they never
+restrict placing. `GET /api/shops/<shop>` also returns `requests` for world
+shops (legacy shops: field absent). Live: after a change the server sends SSE `requests { requests }`
+on that shop's stream, and `note { note }` on the stream of **every** shop in
+the world (no re-fetch needed).
