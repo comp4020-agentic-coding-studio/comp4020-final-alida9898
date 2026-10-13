@@ -12,7 +12,7 @@ const TEXT = {
     leftToday: (n) => `今天还能帮 ${n} 件`, townsDone: "今天已经帮了 3 个小镇啦，明天再来",
     invite: "邀请朋友来帮忙", inviteNote: "把这个链接发给朋友：他们每天最多能帮你放 8 件东西。",
     copy: "复制链接", copied: "已复制",
-    preview: "预览", placed: (n) => `已放 ${n} 件`,
+    preview: "预览", placed: (n) => `已放 ${n} 件 / ${n} placed`,
     names: { cafe: "咖啡馆", flower: "花店", book: "书店", bakery: "面包房" },
     bad: "这个小镇的链接好像不对，", badHome: "回到首页", missing: "没有找到这个小镇，",
     trouble: "小镇暂时没打开，过一会儿刷新试试。",
@@ -30,7 +30,7 @@ const TEXT = {
     leftToday: (n) => `${n} left today`, townsDone: "You've helped 3 towns today — come back tomorrow",
     invite: "Invite a friend to help", inviteNote: "Send this link to a friend: they can place up to 8 things a day for you.",
     copy: "Copy link", copied: "Copied",
-    preview: "Preview", placed: (n) => `${n} placed`,
+    preview: "Preview", placed: (n) => `${n} placed / 已放 ${n} 件`,
     names: { cafe: "Café", flower: "Flower shop", book: "Bookshop", bakery: "Bakery" },
     bad: "This town link doesn't look right — ", badHome: "go home", missing: "This town couldn't be found — ",
     trouble: "The town didn't open just now. Try refreshing in a moment.",
@@ -85,7 +85,7 @@ function streetShops() {
   return TYPES.map((type) => {
     const s = data?.shops?.find((x) => x.type === type);
     const flag = s?.requests?.length ? (data.role === "guest" ? t.flagGuest : t.flagOwner) : "";
-    return { type, label: t.names[type], tag: type === "cafe" ? "" : t.preview, meta: s ? t.placed(s.placed) : "", flag };
+    return { type, label: t.names[type], meta: s ? t.placed(s.placed) : "", flag };
   });
 }
 const street = await createStreet($("street"), {

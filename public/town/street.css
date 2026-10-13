@@ -1,18 +1,7 @@
-/* the shared street scene (street.js): canvas, shop labels, speech bubble */
+/* the shared street scene (street.js): canvas and speech bubble (shop names are clay banners in 3D) */
 .street { position: relative; overflow: hidden; }
 .street-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; }
 .street-overlay { position: absolute; inset: 0; pointer-events: none; }
-.street-label {
-  position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer;
-  font: inherit; color: var(--ink); text-align: center; white-space: nowrap;
-  background: var(--card); border: 2px dashed var(--stitch); border-radius: 14px; padding: 3px 11px 4px;
-  box-shadow: 0 4px 14px rgba(74, 46, 31, 0.12); transition: box-shadow 0.15s, background 0.15s;
-}
-.street-label.hot, .street-label:focus-visible { background: var(--paper-2); box-shadow: 0 6px 18px rgba(74, 46, 31, 0.2); }
-.street-label .sname { display: block; font-size: 0.92rem; }
-.street-label .smeta { display: block; font-size: 0.72rem; color: var(--ink-soft); }
-.street-label .stag { font-size: 0.66rem; padding: 0 5px; margin-left: 4px; border-radius: 8px; background: var(--paper-2); color: var(--ink-soft); }
-
 /* comic speech bubble: the anchor sits at the tail tip; the bubble floats above it */
 .street-bubble { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 5; }
 .street-bubble[hidden] { display: none; }
@@ -34,15 +23,12 @@
   to { opacity: 1; transform: translateX(-50%) scale(1); }
 }
 @media (max-width: 700px) {
-  .street-label { padding: 2px 7px 3px; }
-  .street-label .sname { font-size: 0.78rem; }
-  .street-label .smeta { font-size: 0.64rem; }
   .street-bubble .say { font-size: 0.88rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .street-bubble.pop .say { animation: none; }
-  .street-bubble.out .say, .street-label { transition: none; }
+  .street-bubble.out .say { transition: none; }
 }
-.street-label .sflag { display: inline-block; margin-left: 4px; font-size: 0.8rem; transform-origin: 20% 100%; animation: flag-wave 2.4s ease-in-out infinite; }
-@keyframes flag-wave { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
-@media (prefers-reduced-motion: reduce) { .street-label .sflag { animation: none; } }
+.street-bubble .say > span { display: block; text-align: center; }
+.street-bubble .say > span[hidden] { display: none; }
+.street-bubble .say-meta, .street-bubble .say-flag { font-size: 0.78em; color: #7a5a44; margin-top: 2px; }

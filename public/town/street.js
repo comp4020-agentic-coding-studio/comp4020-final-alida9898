@@ -4,7 +4,10 @@
 // and the town page (/w/<world>).
 //
 //   const street = await createStreet(container, { season, lang, shops, onPick });
-//   shops: [{ type, label, meta?, tag?, flag? }] (flag: help-request tooltip text) — label text under each shop
+//   shops: [{ type, label?, meta?, tag?, flag? }] — each shop wears a clay roof banner
+//     (fixed bilingual name, English first); meta (e.g. progress) and flag (help-request
+//     text, also raises a clay pennant) are added to that shop's hover bubble. label/tag
+//     are accepted for compatibility but not drawn.
 //   onPick(type) — a shop was clicked (or tapped twice on touch)
 //   padTop — px at the top of the container covered by other UI; framing keeps shops below it
 //   street.setShops(shops) · street.setLang(lang) · street.destroy()
@@ -20,6 +23,7 @@ import { build as buildSign } from "/clay/models/a-frame-sign.js";
 import { build as buildBucket } from "/clay/models/flower-bucket.js";
 import { build as buildCart } from "/clay/models/book-cart.js";
 import { build as buildBasket } from "/clay/models/bakery-bread-basket.js";
+import { createWeather } from "/shops/weather.js";
 
 const { THREE } = kit;
 
@@ -43,6 +47,10 @@ const SHOP = {
   book: { x: 300, w: 340, h: 340, wall: 0xe8dcc4, trim: 0x5e6f8a, roof: 0x5e6f8a, awning: [0x7f9bb3, 0xf1e4cc], door: 0x4f5f78 },
   bakery: { x: 900, w: 360, h: 280, wall: 0xf6e7c8, trim: 0xc8694a, roof: 0xc8694a, awning: [0xc8694a, 0xf6e7c8], door: 0x8a5a3c },
 };
+const BANNER = { cafe: ["CAFÉ", "咖啡馆"], flower: ["FLOWERS", "花店"], book: ["BOOKS", "书店"], bakery: ["BAKERY", "面包店"] };
+const FONT = '"Songti SC", "Noto Serif SC", Georgia, serif';
+const css = (hex) => `#${hex.toString(16).padStart(6, "0")}`;
+const RISE = 110;
 const DEPTH = 300, FRONT_Z = -120;          // shop footprint: z ∈ [FRONT_Z - DEPTH, FRONT_Z]
 const WALK_Z = 45;                          // the cat's line along the pavement
 const ROAD_Z = [80, 380];
@@ -62,7 +70,7 @@ function buildShop(type) {
   add(kit.roundedBox(W, H, D, 14, s.wall), 0, 16 + H / 2, 0);                    // walls
   add(kit.roundedBox(W + 8, 14, D + 8, 6, s.trim), 0, 16 + H, 0);                 // eave band
   // gabled roof: two slabs meeting at a ridge along X
-  const rise = 110, half = D / 2 + 30, slope = Math.atan2(rise, half), len = Math.hypot(rise, half) + 10;
+  const rise = RISE, half = D / 2 + 30, slope = Math.atan2(rise, half), len = Math.hypot(rise, half) + 10;
   for (const side of [-1, 1]) {
     const slab = add(kit.roundedBox(W + 50, 22, len, 10, s.roof), 0, 16 + H + 8 + rise / 2, side * half / 2);
     slab.rotation.x = side * slope;
@@ -111,7 +119,51 @@ function buildShop(type) {
     const loaf = kit.blob(24, 12, 8, 0xd9a63a); em.add(loaf);
     for (const x of [-9, 0, 9]) { const c = kit.roundedBox(3, 14, 4, 1.5, 0xb8693a); c.position.set(x, 2, 7); c.rotation.z = 0.5; em.add(c); }
   }
-  return shadowed(g);
+  shadowed(g);
+  g.userData.banner = buildBanner(type, g);
+  return g;
+}
+
+/** Paint the banner face: English name large, Chinese small underneath, cream border. */
+function paintBanner(type, canvas) {
+  const s = SHOP[type], [en, zh] = BANNER[type], c = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  c.clearRect(0, 0, W, H);
+  const rr = (x, y, w, h, r) => { c.beginPath(); c.roundRect(x, y, w, h, r); };
+  rr(0, 0, W, H, 70); c.fillStyle = "#faf3e4"; c.fill();
+  rr(18, 18, W - 36, H - 36, 54); c.fillStyle = css(s.awning[0]); c.fill();
+  c.setLineDash([14, 12]); c.lineWidth = 5; c.strokeStyle = "rgba(250,243,228,0.75)";
+  rr(36, 36, W - 72, H - 72, 40); c.stroke(); c.setLineDash([]);
+  const light = s.awning[0] === 0xe39bb0;
+  c.fillStyle = light ? "#5a2e3a" : "#fbf3e2"; c.textAlign = "center"; c.textBaseline = "alphabetic";
+  let size = 190; c.font = `italic 700 ${size}px ${FONT}`;
+  while (c.measureText(en).width > W - 120 && size > 60) { size -= 6; c.font = `italic 700 ${size}px ${FONT}`; }
+  c.fillText(en, W / 2, H * 0.58);
+  c.font = `700 92px ${FONT}`; c.globalAlpha = 0.9; c.fillText(zh, W / 2, H * 0.84); c.globalAlpha = 1;
+}
+
+/** A rounded clay board standing on the roof ridge, facing the road, plus a hidden pennant. */
+function buildBanner(type, shop) {
+  const s = SHOP[type], bw = Math.min(260, s.w * 0.72), bh = bw * 0.42;
+  const ridge = 16 + s.h + 8 + RISE + 6;
+  const b = new THREE.Group(); b.position.set(0, ridge + bh / 2 + 10, 8);
+  b.add(kit.roundedBox(bw + 14, bh + 14, 12, 18, s.trim));
+  for (const x of [-bw * 0.32, bw * 0.32]) { const post = kit.roundedCylinder(5, 34, 2, s.trim); post.position.set(x, -bh / 2 - 12, -2); b.add(post); }
+  const canvas = document.createElement("canvas"); canvas.width = 1024; canvas.height = Math.round(1024 * bh / bw);
+  paintBanner(type, canvas);
+  const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(bw, bh), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, transparent: true }));
+  face.position.z = 6.5; b.add(face);
+  // help-request pennant: a stick and a small triangular flag that waves
+  const pen = new THREE.Group(); pen.position.set(bw / 2 + 30, -bh / 2 - 20, 0); pen.visible = false;
+  const stick = kit.roundedCylinder(3, 110, 1.5, 0x8a5a3c); stick.position.y = 55; pen.add(stick);
+  const knob = kit.blob(6, 6, 6, 0xd9a63a); knob.position.y = 112; pen.add(knob);
+  const tri = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(52, -14), new THREE.Vector2(0, -30)]);
+  const flag = new THREE.Mesh(new THREE.ExtrudeGeometry(tri, { depth: 3, bevelEnabled: true, bevelSize: 2, bevelThickness: 2, bevelSegments: 2 }), kit.clay(0xd2553f));
+  const flagPivot = new THREE.Group(); flagPivot.position.set(2, 104, 0); flagPivot.add(flag); pen.add(flagPivot);
+  b.add(pen);
+  shop.add(shadowed(b));
+  return { canvas, tex, pen, flagPivot, repaint() { paintBanner(type, canvas); tex.needsUpdate = true; } };
 }
 
 async function buildProps(type, x) {
@@ -139,12 +191,16 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
   const r = kit.rng(11);
 
   container.classList.add("street");
-  container.style.background = look.sky;
+  container.style.background = look.sky;   // until the first frame paints the sky
   const canvas = document.createElement("canvas");
   canvas.className = "street-canvas"; canvas.setAttribute("aria-hidden", "true");
   const overlay = document.createElement("div"); overlay.className = "street-overlay";
   const bubble = document.createElement("div"); bubble.className = "street-bubble"; bubble.hidden = true; bubble.setAttribute("role", "status");
-  const say = document.createElement("span"); say.className = "say"; bubble.append(say);
+  const say = document.createElement("span"); say.className = "say";
+  const sayLine = document.createElement("span"); sayLine.className = "say-main";
+  const sayMeta = document.createElement("span"); sayMeta.className = "say-meta";
+  const sayFlag = document.createElement("span"); sayFlag.className = "say-flag";
+  say.append(sayLine, sayMeta, sayFlag); bubble.append(say);
   overlay.append(bubble);
   container.append(canvas, overlay);
 
@@ -165,12 +221,12 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
   const fill = new THREE.DirectionalLight(0xe6eeff, 0.5); fill.position.set(900, 500, 900); scene.add(fill);
 
   // ---- ground: grass, pavement, road with a dashed centre line ----
-  const ground = kit.roundedBox(6000, 20, 4000, 10, look.grass); ground.position.set(0, -10, 200); scene.add(ground);
+  const weather = createWeather(scene, { season, renderer, camera, bounds: { x: [-1700, 1700], z: [-700, 900] }, groundY: 0 });
   const pave = kit.roundedBox(6000, 6, 200, 3, 0xe6dccb); pave.position.set(0, 2, (FRONT_Z + ROAD_Z[0]) / 2 + 20); scene.add(pave);
   const road = kit.roundedBox(6000, 4, ROAD_Z[1] - ROAD_Z[0], 2, 0xb9ad9c); road.position.set(0, 1, (ROAD_Z[0] + ROAD_Z[1]) / 2); scene.add(road);
   for (let x = -2900; x < 2900; x += 160) { const d = kit.roundedBox(80, 2, 12, 1, 0xf3ece0); d.position.set(x, 3.5, (ROAD_Z[0] + ROAD_Z[1]) / 2); scene.add(d); }
   const far = kit.roundedBox(6000, 6, 140, 3, 0xe6dccb); far.position.set(0, 2, ROAD_Z[1] + 70); scene.add(far);
-  for (const m of [ground, pave, road, far]) { m.castShadow = false; m.receiveShadow = true; }
+  for (const m of [pave, road, far]) { m.castShadow = false; m.receiveShadow = true; }
 
   // ---- shops ----
   const shopGroups = {};
@@ -241,32 +297,31 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
     catHolder.position.set(w.x, 6, WALK_Z);
   }
 
-  // ---- labels (HTML, under each shop) ----
-  const labels = {};
-  for (const type of TYPES) {
-    const b = document.createElement("button"); b.type = "button"; b.className = "street-label"; b.dataset.type = type;
-    b.addEventListener("click", () => onPick(type));
-    b.addEventListener("pointerenter", () => show(type));
-    b.addEventListener("pointerleave", () => hover === type && show(null));
-    overlay.append(b); labels[type] = b;
-  }
+  // ---- per-shop extras for the bubble (meta / flag) and the banner pennant ----
+  let info = {};
   function setShops(list) {
+    info = {};
     for (const type of TYPES) {
-      const s = list.find((x) => x.type === type), b = labels[type];
-      b.hidden = !s; b.replaceChildren();
-      if (!s) continue;
-      const n = document.createElement("span"); n.className = "sname"; n.textContent = s.label;
-      if (s.tag) { const t = document.createElement("span"); t.className = "stag"; t.textContent = s.tag; n.append(t); }
-      if (s.flag) { const f = document.createElement("span"); f.className = "sflag"; f.textContent = "🚩"; f.title = s.flag; f.setAttribute("aria-label", s.flag); n.append(f); }
-      b.title = s.flag || "";
-      b.append(n);
-      if (s.meta) { const m = document.createElement("span"); m.className = "smeta"; m.textContent = s.meta; b.append(m); }
+      const s = list.find((x) => x.type === type);
+      const g = shopGroups[type];
+      g.visible = true;
+      info[type] = { meta: s?.meta || "", flag: s?.flag || "" };
+      g.userData.banner.pen.visible = !!s?.flag;
     }
+    if (hover) fillBubble(hover);
     dirty = true;
   }
+  function fillBubble(what) {
+    sayLine.textContent = SAYS[lang][what];
+    const i = info[what] || {};
+    sayMeta.textContent = i.meta || ""; sayMeta.hidden = !i.meta;
+    sayFlag.textContent = i.flag ? `🚩 ${i.flag}` : ""; sayFlag.hidden = !i.flag;
+  }
+  // canvas text needs the page fonts: repaint banners once they are ready
+  document.fonts?.ready.then(() => { if (!alive) return; for (const g of Object.values(shopGroups)) g.userData.banner.repaint(); dirty = true; });
 
   // ---- hover / tap: speech bubble + a small lift ----
-  let hover = null, dirty = true;
+  let hover = null, dirty = true, alive = true;
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   const pickables = [...Object.values(shopGroups), catHolder];
   function pickAt(e) {
@@ -284,9 +339,8 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
     hover = what;
     if (what && shopGroups[what]) shopGroups[what].userData.lift = 1;
     canvas.style.cursor = what ? "pointer" : "";
-    for (const [t, b] of Object.entries(labels)) b.classList.toggle("hot", t === what);
     if (what) {
-      say.textContent = SAYS[lang][what];
+      fillBubble(what);
       bubble.hidden = false; bubble.classList.remove("out");
       bubble.classList.remove("pop"); void bubble.offsetWidth; bubble.classList.add("pop");
     } else if (!bubble.hidden) {
@@ -325,7 +379,7 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
     let dist = 2400;
     const off = new THREE.Vector3(-Math.sin(az) * Math.cos(elev), Math.sin(elev), Math.cos(az) * Math.cos(elev));
     // shrink-to-fit: back off until all four shops project inside the frame
-    const pts = TYPES.flatMap((t) => [new THREE.Vector3(SHOP[t].x - SHOP[t].w / 2 - 40, 0, FRONT_Z + 40), new THREE.Vector3(SHOP[t].x - SHOP[t].w / 2 - 40, SHOP[t].h + 60, FRONT_Z - DEPTH - 30), new THREE.Vector3(SHOP[t].x + SHOP[t].w / 2, SHOP[t].h + 140, FRONT_Z - DEPTH)]);
+    const pts = TYPES.flatMap((t) => [new THREE.Vector3(SHOP[t].x - SHOP[t].w / 2 - 40, 0, FRONT_Z + 40), new THREE.Vector3(SHOP[t].x - SHOP[t].w / 2 - 40, SHOP[t].h + 60, FRONT_Z - DEPTH - 30), new THREE.Vector3(SHOP[t].x + SHOP[t].w / 2, SHOP[t].h + 280, FRONT_Z - DEPTH / 2)]);
     for (let k = 0; k < 30; k++) {
       camera.position.copy(TARGET).addScaledVector(off, dist);
       camera.lookAt(TARGET); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
@@ -341,28 +395,27 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
   resize();
 
   // ---- loop ----
-  const tmp = new THREE.Vector3();
   function placeOverlay() {
     const rc = container.getBoundingClientRect();
     const toPx = (v) => { const q = v.clone().project(camera); return [(q.x + 1) / 2 * rc.width, (1 - q.y) / 2 * rc.height]; };
-    for (const type of TYPES) {
-      const [x, y] = toPx(tmp.set(SHOP[type].x + SHOP[type].w * 0.22, 0, FRONT_Z + 40));
-      labels[type].style.transform = `translate(${x}px, ${y}px) translate(-50%, 0)`;
-    }
     if (hover && !bubble.hidden) {
       const p = hover === "cat"
         ? catHolder.position.clone().add(new THREE.Vector3(0, 110, 0))
-        : new THREE.Vector3(SHOP[hover].x, SHOP[hover].h + 150, FRONT_Z - DEPTH / 2);
+        : new THREE.Vector3(SHOP[hover].x, SHOP[hover].h + 290, FRONT_Z - DEPTH / 2);
       const [x, y] = toPx(p);
       bubble.style.transform = `translate(${x}px, ${y}px)`;
     }
   }
-  let last = performance.now(), raf = 0, alive = true;
+  let last = performance.now(), raf = 0;
   function frame(now) {
     if (!alive) return;
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     stepCat(dt);
     anim.update(dt);
+    if (!reduced) {
+      weather.update(dt);
+      for (const g of Object.values(shopGroups)) { const p = g.userData.banner; if (p.pen.visible) p.flagPivot.rotation.y = Math.sin(now / 600 + g.position.x) * 0.35; }
+    }
     for (const g of Object.values(shopGroups)) {
       const want = (g.userData.lift || 0) * 14;
       if (Math.abs(g.position.y - want) > 0.1) { g.position.y += (want - g.position.y) * Math.min(1, dt * 10); dirty = true; }
@@ -378,11 +431,11 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
   const api = {
     setShops,
     reframe: resize,
-    setLang(l) { lang = l; if (hover) say.textContent = SAYS[lang][hover]; },
+    setLang(l) { lang = l; if (hover) fillBubble(hover); },
     pick: (type) => onPick(type),
     /** for tests / scripted checks */
     _debug: { show, walker, anim, camera, catHolder, step: (dt) => { stepCat(dt); anim.update(dt); renderer.render(scene, camera); placeOverlay(); } },
-    destroy() { alive = false; cancelAnimationFrame(raf); ro.disconnect(); renderer.dispose(); container.replaceChildren(); },
+    destroy() { alive = false; cancelAnimationFrame(raf); ro.disconnect(); weather.dispose(); renderer.dispose(); container.replaceChildren(); },
   };
   container.street = api;   // reachable from devtools / scripted checks
   return api;
