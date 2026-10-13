@@ -10,6 +10,7 @@
 //     are accepted for compatibility but not drawn.
 //   onPick(type) — a shop was clicked (or tapped twice on touch)
 //   padTop — px at the top of the container covered by other UI; framing keeps shops below it
+//   padLeft — px on the left kept clear for copy; the town is framed in the lower-right of what remains
 //   street.setShops(shops) · street.setLang(lang) · street.destroy()
 //
 // World units are cm (the clay kit's). The road runs along +X; shops sit on the
@@ -185,7 +186,7 @@ async function buildProps(type, x) {
   return shadowed(g);
 }
 
-export async function createStreet(container, { season = "spring", lang = "zh", shops = [], onPick = () => {}, padTop = 0 } = {}) {
+export async function createStreet(container, { season = "spring", lang = "zh", shops = [], onPick = () => {}, padTop = 0, padLeft = 0 } = {}) {
   const look = LOOK[season] || LOOK.spring;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const r = kit.rng(11);
@@ -366,6 +367,7 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
   // ---- framing: fit the four shops; portrait turns the road to run more upward ----
   const TARGET = new THREE.Vector3(0, 60, -80);
   const pad = padTop; padTop = () => (typeof pad === "function" ? pad() : pad) || 0;
+  const padL = padLeft; padLeft = () => (typeof padL === "function" ? padL() : padL) || 0;
   function resize() {
     const rc = container.getBoundingClientRect();
     if (!rc.width || !rc.height) return;
@@ -377,6 +379,10 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
     const elev = aspect >= 0.8 ? 0.5 : 0.62;
     camera.fov = aspect >= 1 ? 30 : 38;
     let dist = 2400;
+    // keep a left column clear for the copy: frame into the space right of it, nudged down
+    const left = Math.min(padLeft(), rc.width * 0.5);
+    if (left > 0) camera.setViewOffset(rc.width + left, rc.height + rc.height * 0.12, 0, 0, rc.width, rc.height);
+    else camera.clearViewOffset();
     const off = new THREE.Vector3(-Math.sin(az) * Math.cos(elev), Math.sin(elev), Math.cos(az) * Math.cos(elev));
     // shrink-to-fit: back off until all four shops project inside the frame
     const pts = TYPES.flatMap((t) => [new THREE.Vector3(SHOP[t].x - SHOP[t].w / 2 - 40, 0, FRONT_Z + 40), new THREE.Vector3(SHOP[t].x - SHOP[t].w / 2 - 40, SHOP[t].h + 60, FRONT_Z - DEPTH - 30), new THREE.Vector3(SHOP[t].x + SHOP[t].w / 2, SHOP[t].h + 280, FRONT_Z - DEPTH / 2)]);
@@ -384,14 +390,15 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
       camera.position.copy(TARGET).addScaledVector(off, dist);
       camera.lookAt(TARGET); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
       const top = 0.9 - 2 * Math.min(padTop(), rc.height * 0.4) / rc.height;
-      const ok = pts.every((p) => { const q = p.clone().project(camera); return Math.abs(q.x) < 0.92 && q.y < top && q.y > -0.86; });
+      const xMin = left > 0 ? -1 + 2 * (left + 24) / rc.width : -0.92;
+      const ok = pts.every((p) => { const q = p.clone().project(camera); return q.x > xMin && q.x < 0.94 && q.y < top && q.y > -0.9; });
       if (ok) break;
       dist *= 1.04;
     }
     dirty = true;
   }
   const ro = new ResizeObserver(resize); ro.observe(container);
-  if (typeof pad === "function") addEventListener("resize", resize);
+  if (typeof pad === "function" || typeof padL === "function") addEventListener("resize", resize);
   resize();
 
   // ---- loop ----

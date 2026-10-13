@@ -159,7 +159,9 @@
         try { localStorage.setItem(LANG_KEY, lang); } catch {}
         render();
       });
-      street = await createStreet($("street"), { season: await currentSeason(), lang, shops: shops(), onPick: go });
+      street = await createStreet($("street"), { season: await currentSeason(), lang, shops: shops(), onPick: go,
+        // wide screens: the copy sits top-left, so the town is framed to its lower right
+        padLeft: () => innerWidth / innerHeight >= 1.2 ? document.querySelector(".copy").getBoundingClientRect().right : 0 });
     </script>
   </body>
 </html>
