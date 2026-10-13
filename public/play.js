@@ -336,7 +336,8 @@ function viewBox(v) {
     const zb = zoneBoxes(v.level, v.zone).reduce((a, b) => a.union(b));
     // indoors, seasonal things never move the camera: frame the base items only
     const list = zoneItems(v.level, v.zone).filter((it) => isYard(v.level) || !it.season);
-    if (!list.length) return zb;
+    // the yard is small and open: show all of it, not just the few pieces in it
+    if (!list.length || isYard(v.level)) return zb;
     const b = new THREE.Box3();
     for (const it of list) b.union(new THREE.Box3().setFromObject(it.obj));
     b.min.y = Math.min(b.min.y, zb.min.y);
@@ -1449,7 +1450,7 @@ function tick(now) {
   stepMarker(now);
   stepHoldDots(now);
   stepReqGlow(now);
-  weather.update(Math.min(0.1, (now - (tick.last ?? now)) / 1000)); tick.last = now;
+  weather.update(Math.min(0.1, (now - (tick.last ?? now)) / 1000), camera.position); tick.last = now;
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }

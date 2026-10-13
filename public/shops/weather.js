@@ -90,7 +90,23 @@ export function createWeather(scene, { season = "spring", bounds = { x: [-500, 5
   // keepOut: {x:[..], z:[..]} footprint (e.g. a building) where nothing should drift — it's indoors
   const inside = (x, z) => keepOut && x > keepOut.x[0] && x < keepOut.x[1] && z > keepOut.z[0] && z < keepOut.z[1];
   let t = 0;
-  function update(dt = 0) {
+  // trees: far-off scenery only — any crown the camera comes near or that sits between it and the shop hides
+  const treeAt = [];
+  for (let i = 0; i < N; i++) { trunks.getMatrixAt(i, m4); treeAt.push(new THREE.Vector3().setFromMatrixPosition(m4)); }
+  const centre = new THREE.Vector3(cx, groundY, cz), seg = new THREE.Line3(), near = new THREE.Vector3(), hidden = new Array(N).fill(false);
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0), keep = [];
+  for (let i = 0; i < N; i++) { const a = new THREE.Matrix4(), b2 = new THREE.Matrix4(); trunks.getMatrixAt(i, a); crowns.getMatrixAt(i, b2); keep.push([a, b2]); }
+  function clearView(cam) {
+    seg.set(cam, centre); let changed = false;
+    for (let i = 0; i < N; i++) {
+      const p = treeAt[i], d = seg.closestPointToPoint(p, true, near).setY(p.y).distanceTo(p);
+      const hide = cam.distanceTo(p) < 260 || d < 140;
+      if (hide !== hidden[i]) { hidden[i] = hide; trunks.setMatrixAt(i, hide ? zero : keep[i][0]); crowns.setMatrixAt(i, hide ? zero : keep[i][1]); changed = true; }
+    }
+    if (changed) { trunks.instanceMatrix.needsUpdate = crowns.instanceMatrix.needsUpdate = true; }
+  }
+  function update(dt = 0, cam = null) {
+    if (cam) clearView(cam);
     if (!bits) return;
     t += dt;
     for (const [i, p] of state.entries()) {
