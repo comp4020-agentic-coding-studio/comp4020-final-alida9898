@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>小镇一角 · 小猫预览</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+      }
+    </script>
+    <style>
+      body { margin: 0; height: 100vh; display: flex; flex-direction: column; color: var(--ink); }
+      #view { flex: 1; min-height: 0; width: 100%; display: block; }
+      .panel { padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; background: var(--card); border-top: 2px dashed var(--stitch); }
+      .panel button { font: inherit; padding: 6px 10px; border-radius: 12px; border: 1.5px solid var(--stitch); background: var(--paper); color: var(--ink); cursor: pointer; }
+      .panel button[aria-pressed="true"] { background: var(--accent); }
+      .panel label { display: flex; gap: 6px; align-items: center; font-size: 14px; }
+      .group { display: flex; flex-wrap: wrap; gap: 6px; }
+      .swatch { width: 14px; height: 14px; border-radius: 50%; display: inline-block; vertical-align: -2px; margin-right: 4px; border: 1px solid #0003; }
+      h1 { font-size: 16px; margin: 0; width: 100%; }
+    </style>
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+    <div class="panel">
+      <h1>小猫预览 · Cat preview <span class="small" id="rm"></span></h1>
+      <div class="group" id="motions"></div>
+      <label>速度 Speed <input id="speed" type="range" min="0.5" max="2" step="0.1" value="1" /><output id="speed-o">1.0×</output></label>
+      <label>幅度 Amplitude <input id="amp" type="range" min="0.3" max="1.5" step="0.1" value="1" /><output id="amp-o">1.0×</output></label>
+      <label><input id="idle" type="checkbox" checked /> 自动待机 Idle loop</label>
+      <div class="group" id="coats"></div>
+    </div>
+    <script type="module" src="/cat.js"></script>
+  </body>
+</html>
