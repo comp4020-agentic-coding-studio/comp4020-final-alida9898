@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>小镇一角 · A Corner of Town</title>
     <link rel="stylesheet" href="/style.css" />
+    <style>
+      .cafe-entry { margin: 1.4rem 0 0.5rem; }
+      .cafe-buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+      .cafe-buttons .btn { margin: 0.8rem 0 0.4rem; padding: 0.6em 1.5em; }
+      .btn-soft { color: var(--stitch); background: var(--card); outline-color: var(--stitch); border-color: var(--stitch); }
+      .older { margin-top: 2.5rem; }
+      .town-map.secondary { width: min(100%, 380px); margin-top: 0.4rem; opacity: 0.85; }
+    </style>
   </head>
   <body class="landing">
     <button id="lang-toggle" class="lang-toggle" type="button" aria-label="Switch language">EN</button>
@@ -15,7 +23,17 @@
         你拼一半，一个陌生人拼另一半：一边是店门口和柜台，一边是里屋的座位。<br />
         一个人也能拼完。两个人都在的时候，中间那扇门会打开。
       </p>
-      <div class="town-map">
+      <div class="cafe-entry">
+        <p class="small" id="cafe-lede">和一个人一起，把一家咖啡馆一件一件摆好。同一个链接，同一家店。</p>
+        <div class="cafe-buttons">
+          <button id="open-cafe" class="btn" type="button">开一家店</button>
+          <button id="join-cafe" class="btn btn-soft" type="button">随便进一家</button>
+        </div>
+        <p id="back-cafe" hidden><a href="#">回到我的店 →</a></p>
+        <p id="cafe-error" class="small" hidden></p>
+      </div>
+      <p class="small older" id="older">更早的贴纸版本：</p>
+      <div class="town-map secondary">
         <img src="/town-map.webp" alt="小镇地图，目前只有咖啡店盖好了" />
         <button id="plot-coffee" class="hotspot">
           <span class="label">点它进去拼 →</span>
@@ -37,6 +55,10 @@
           resume: "继续拼我的那一半 →",
           about: "关于这个作品",
           toggle: "EN",
+          cafeLede: "和一个人一起，把一家咖啡馆一件一件摆好。同一个链接，同一家店。",
+          openCafe: "开一家店", joinCafe: "随便进一家", backCafe: "回到我的店 →",
+          cafeError: "店门暂时没打开，过一会儿再试试。",
+          older: "更早的贴纸版本：",
           inviteCaption: "有人邀请你一起拼这个场景，点它加入 →",
           inviteInvalid: "这个邀请链接已经失效了，帮你开一个新的吧。",
           inviteFull: "这个场景已经有两个人在拼了，帮你开一个新的吧。",
@@ -51,6 +73,10 @@
           resume: "Resume my half →",
           about: "About this project",
           toggle: "中文",
+          cafeLede: "Set up a café together with someone, one thing at a time. Same link, same café.",
+          openCafe: "Open a café", joinCafe: "Join a café", backCafe: "Back to my café →",
+          cafeError: "The door didn't open just now. Try again in a moment.",
+          older: "The earlier sticker version:",
           inviteCaption: "Someone invited you to build this scene with them — tap to join →",
           inviteInvalid: "That invite link isn't valid anymore — starting you a fresh one instead.",
           inviteFull: "Two people are already building this one — starting you a fresh one instead.",
@@ -73,6 +99,12 @@
         document.querySelector("#resume a").textContent = t.resume;
         document.getElementById("about-link").textContent = t.about;
         document.getElementById("lang-toggle").textContent = t.toggle;
+        document.getElementById("cafe-lede").textContent = t.cafeLede;
+        document.getElementById("open-cafe").textContent = t.openCafe;
+        document.getElementById("join-cafe").textContent = t.joinCafe;
+        document.querySelector("#back-cafe a").textContent = t.backCafe;
+        document.getElementById("cafe-error").textContent = t.cafeError;
+        document.getElementById("older").textContent = t.older;
       }
       applyLang();
       document.getElementById("lang-toggle").addEventListener("click", () => {
@@ -80,6 +112,31 @@
         try { localStorage.setItem(LANG_KEY, lang); } catch {}
         applyLang();
       });
+
+      // the shared café: a shop id is the whole invitation
+      let lastShop = null;
+      try { lastShop = localStorage.getItem("cafe-last-shop"); } catch {}
+      if (lastShop && /^[\w-]+$/.test(lastShop)) {
+        const b = document.getElementById("back-cafe");
+        b.hidden = false;
+        b.querySelector("a").href = `/shop/${lastShop}`;
+      }
+      for (const [id, path] of [["open-cafe", "/api/shops"], ["join-cafe", "/api/shops/match"]]) {
+        document.getElementById(id).addEventListener("click", async (e) => {
+          const btns = document.querySelectorAll(".cafe-buttons button");
+          btns.forEach((b) => (b.disabled = true));
+          try {
+            const res = await fetch(path, { method: "POST" });
+            if (!res.ok) throw new Error(String(res.status));
+            const { shop } = await res.json();
+            try { localStorage.setItem("cafe-last-shop", shop); } catch {}
+            location.href = `/shop/${shop}`;
+          } catch {
+            document.getElementById("cafe-error").hidden = false;
+            btns.forEach((b) => (b.disabled = false));
+          }
+        });
+      }
 
       const KEY = "my-half";
       let saved = null;

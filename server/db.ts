@@ -106,3 +106,71 @@ export function place(token: string, stickerId: string): string[] | undefined {
   db.prepare("UPDATE halves SET placed = ? WHERE token = ?").run(JSON.stringify(placed), token);
   return placed;
 }
+
+// ---- shared shops: one café built together by everyone holding the link ----
+// shop_items' primary key makes "first drop wins" atomic: INSERT OR IGNORE.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS shops (
+    id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+  );
+  CREATE TABLE IF NOT EXISTS shop_items (
+    shop TEXT NOT NULL REFERENCES shops(id),
+    item TEXT NOT NULL,
+    by TEXT NOT NULL,
+    placed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    seq INTEGER NOT NULL,
+    PRIMARY KEY (shop, item)
+  );
+`);
+
+export const SHOP_CAP = 300;
+export const ITEM_RE = /^[a-z0-9-]{1,64}$/;
+
+export function createShop(): string {
+  const shop = id(9);
+  db.prepare("INSERT INTO shops (id) VALUES (?)").run(shop);
+  return shop;
+}
+
+export function getShop(shop: string): { shop: string; placed: string[] } | undefined {
+  if (!db.prepare("SELECT 1 FROM shops WHERE id = ?").get(shop)) return undefined;
+  const rows = db.prepare("SELECT item FROM shop_items WHERE shop = ? ORDER BY seq").all(shop) as { item: string }[];
+  return { shop, placed: rows.map((r) => r.item) };
+}
+
+export type PlaceResult = { ok: true } | { ok: false; reason: "taken" | "unknown_shop" | "bad_item" | "full" };
+
+export function placeItem(shop: string, item: string, by: string): PlaceResult {
+  if (!ITEM_RE.test(item)) return { ok: false, reason: "bad_item" };
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const done = (r: PlaceResult) => (db.exec(r.ok ? "COMMIT" : "ROLLBACK"), r);
+    if (!db.prepare("SELECT 1 FROM shops WHERE id = ?").get(shop)) return done({ ok: false, reason: "unknown_shop" });
+    const { n } = db.prepare("SELECT count(*) AS n FROM shop_items WHERE shop = ?").get(shop) as { n: number };
+    if (db.prepare("SELECT 1 FROM shop_items WHERE shop = ? AND item = ?").get(shop, item)) return done({ ok: false, reason: "taken" });
+    if (n >= SHOP_CAP) return done({ ok: false, reason: "full" });
+    const r = db.prepare("INSERT OR IGNORE INTO shop_items (shop, item, by, seq) VALUES (?, ?, ?, ?)").run(shop, item, by, n);
+    return done(r.changes ? { ok: true } : { ok: false, reason: "taken" });
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
+// Random match: the newest not-full shop among `candidates` (shops with exactly
+// one visitor present right now, known only to the server's memory), else new.
+export function openShop(candidates: string[]): { shop: string; opened: boolean } {
+  if (candidates.length) {
+    const marks = candidates.map(() => "?").join(",");
+    const r = db
+      .prepare(
+        `SELECT s.id FROM shops s WHERE s.id IN (${marks})
+         AND (SELECT count(*) FROM shop_items i WHERE i.shop = s.id) < ${SHOP_CAP}
+         ORDER BY s.created_at DESC LIMIT 1`,
+      )
+      .get(...candidates) as { id: string } | undefined;
+    if (r) return { shop: r.id, opened: false };
+  }
+  return { shop: createShop(), opened: true };
+}

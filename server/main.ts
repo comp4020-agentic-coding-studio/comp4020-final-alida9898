@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { extname, join as pathJoin, normalize } from "node:path";
 import { marked } from "marked";
+import { handleShops, shopExists } from "./shops.ts";
 import { half, join, joinRoom, place, roomHalves, roomStatus } from "./db.ts";
 
 const STICKERS_PATH = "assets/stickers.json";
@@ -74,6 +75,7 @@ const server = createServer(async (req, res) => {
   const p = url.pathname;
   let m: RegExpMatchArray | null;
   try {
+    if (p.startsWith("/api/shops") && (await handleShops(req, res, p, url, json, body))) return;
     if (req.method === "POST" && p === "/api/join") return json(res, 200, join());
     if ((m = p.match(/^\/api\/rooms\/([\w-]+)\/join$/)) && req.method === "POST") {
       const result = joinRoom(m[1]);
@@ -148,6 +150,9 @@ const server = createServer(async (req, res) => {
     if (p === "/manifest.json") return json(res, 200, manifest);
     if ((m = p.match(/^\/s\/([\w-]+)$/))) {
       return half(m[1]) ? file(res, "public", "side.html") : send(res, 404, "这条链接不存在");
+    }
+    if ((m = p.match(/^\/shop\/([\w-]+)$/))) {
+      return shopExists(m[1]) ? file(res, "public", "play.html") : send(res, 404, "这家店不存在");
     }
     if ((m = p.match(/^\/house\/([\w-]+)$/))) {
       return half(m[1]) ? file(res, "public", "house.html") : send(res, 404, "这条链接不存在");

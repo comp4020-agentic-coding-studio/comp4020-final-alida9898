@@ -1,10 +1,13 @@
-// Single-player placement page: zoom building → storey → zone → focus item,
+// Shared placement page: zoom building → storey → zone → focus item,
 // drag each thing from the tray onto its one faint outline. No score, no timer.
+// Everyone holding the shop link builds the same café; progress lives on the
+// server (contract: server/SHOPS.md, client side: cafe/net.js).
 // Items contract: public/cafe/README.md. Building + lights: cafe/build.js.
 import * as THREE from "three";
 import { ROOM, LEVELS, STOREY_H, TUBE, levelY } from "./cafe/zones.js";
 import { addLights, buildCafe, wallAttached } from "./cafe/build.js";
 import { collectItems, devTagIfEmpty } from "./cafe/items.js";
+import { LAST_SHOP_KEY, clientId, connect, loadShop, shopFromUrl, shopUrl } from "./cafe/net.js";
 
 const $ = (id) => document.getElementById(id);
 const debug = new URLSearchParams(location.search).has("debug");
@@ -25,12 +28,16 @@ const TEXT = {
     closer: "走近看看", closerHint: "放好后点它，摆上面的小东西",
     unlocks: (p) => `放好${p}后解锁`, zoomTo: (p) => `点进${p}再放`, unlocksAfter: (p) => `放好${p}后能走近`,
     zoneDone: "这一块都放好了。", allDone: "整间咖啡馆都放好了。慢慢看一圈吧。",
-    restart: "从头再来", sure: "真的从头再来？", yes: "是的", no: "算了",
     pageTitle: "小镇一角 · 摆一摆",
     closerShort: "走近看看", mute: "关掉声音", unmute: "打开声音", help: "怎么玩",
     hintTitle: "怎么玩",
     hintItems: ["点击：走近", "Esc 或 返回：后退", "手机上滑：后退", "把东西拖到发光的轮廓上"],
     hintClose: "点一下就关上",
+    present: (n) => `店里现在有 ${n} 个人`,
+    invite: "邀请一个人一起拼", inviteNote: "把这个链接发给一个人，你们拼的是同一家店。",
+    copy: "复制链接", copied: "已复制", inviteShort: "邀请",
+    holding: "有人在拿",
+    noShop: "没有找到这家店。", home: "回到小镇",
   },
   en: {
     brand: "A Corner of Town", toggle: "中文", cafe: "Café", back: "‹ Back", loading: "Shaping the café out of clay…",
@@ -40,12 +47,16 @@ const TEXT = {
     closer: "Take a closer look", closerHint: "Once it's in, tap it to place what goes on it",
     unlocks: (p) => `Unlocks after: ${p}`, zoomTo: (p) => `Zoom into ${p} to place`, unlocksAfter: (p) => `Open after: ${p}`,
     zoneDone: "This corner's all in place.", allDone: "The whole café is in place. Have a slow look around.",
-    restart: "Start over", sure: "Really start over?", yes: "Yes", no: "Never mind",
     pageTitle: "A Corner of Town · Place things",
     closerShort: "Take a closer look", mute: "Mute", unmute: "Unmute", help: "How to play",
     hintTitle: "How to play",
     hintItems: ["Click: zoom in", "Esc or Back: step back", "Swipe up (phone): back", "Drag things onto the glowing outline"],
     hintClose: "Tap to close",
+    present: (n) => `${n} here now`,
+    invite: "Invite someone", inviteNote: "Send this link to someone: you'll both be building the same café.",
+    copy: "Copy link", copied: "Copied", inviteShort: "Invite",
+    holding: "Someone's holding this",
+    noShop: "This café couldn't be found.", home: "Back to town",
   },
 };
 const LANG_KEY = "lang";
@@ -54,11 +65,16 @@ try { lang = localStorage.getItem(LANG_KEY) === "en" ? "en" : "zh"; } catch {}
 const T = () => TEXT[lang];
 const L = (label) => label[lang] || label.zh || label.en;
 
-// ---- progress (localStorage, single player) -------------------------------
-const SAVE_KEY = "cafe-placed-v1";
+// ---- the shop (server) -----------------------------------------------------
+const shop = shopFromUrl();
+if (!shop) { location.replace("/"); await new Promise(() => {}); }
+const me = clientId();
 const placed = new Set();
-try { for (const id of JSON.parse(localStorage.getItem(SAVE_KEY) || "[]")) placed.add(id); } catch {}
-const save = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify([...placed])); } catch {} };
+const shopLoad = (async () => {
+  for (let i = 0; ; i++) {
+    try { return await loadShop(shop); } catch { await new Promise((r) => setTimeout(r, Math.min(8000, 800 * 2 ** i))); }
+  }
+})();
 
 // ---- sound: a soft wooden "tock", synthesised; starts only after a first gesture
 const MUTE_KEY = "cafe-mute-v1";
@@ -110,7 +126,17 @@ addLights(scene);
 const camera = new THREE.PerspectiveCamera(38, 1, 10, 6000);
 
 $("loading").textContent = T().loading;
-const { storeys, tube } = await buildCafe(scene);
+const [{ storeys, tube }, data] = await Promise.all([buildCafe(scene), shopLoad]);
+if (!data) {
+  const p = document.createElement("p"); p.className = "loading";
+  const a = document.createElement("a"); a.href = "/"; a.textContent = T().home;
+  p.append(T().noShop + " ", a);
+  $("loading").replaceWith(p);
+  await new Promise(() => {});
+}
+for (const id of data.placed) placed.add(id);
+let present = data.present || 1;
+try { localStorage.setItem(LAST_SHOP_KEY, shop); } catch {}
 $("loading").remove();
 const N = LEVELS.length, TOP = N * STOREY_H;
 
@@ -575,19 +601,20 @@ function startPending(e, it, cell) {
 }
 function beginDrag(e, it, cell) {
   hover(null);
+  net.hold(it.id, true);
   const el = document.createElement(thumbs.has(it.id) ? "img" : "div");
   if (thumbs.has(it.id)) el.src = thumbs.get(it.id);
   el.className = "dragging-thumb";
   document.body.append(el);
   cell.classList.add("lifted");
   showGhost(it);
-  drag = { it, el, cell, id: e.pointerId };
+  drag = { it, el, cell, id: e.pointerId, unlisten: () => { removeEventListener("pointermove", move); removeEventListener("pointerup", end); removeEventListener("pointercancel", end); } };
   const pos = (ev) => { el.style.transform = `translate(${ev.clientX - 42}px, ${ev.clientY - 42}px) rotate(-4deg) scale(1.06)`; };
   pos(e);
   const move = (ev) => { if (ev.pointerId === drag.id) pos(ev); };
   const end = (ev) => {
     if (ev.pointerId !== drag.id) return;
-    removeEventListener("pointermove", move); removeEventListener("pointerup", end); removeEventListener("pointercancel", end);
+    drag.unlisten();
     finishDrag(ev, ev.type === "pointerup");
   };
   addEventListener("pointermove", move);
@@ -608,10 +635,14 @@ function spotOnScreen(it) {
   // a spot that's tiny on screen (a cup seen from the zone view) still takes a generous drop
   return { ...c, radius: THREE.MathUtils.clamp(ext * 0.8, ext < 40 ? 90 : 60, 160) };
 }
+/** The tray tile for an item as it is now (the tray may have been redrawn mid-drag). */
+const liveCell = (id, fallback) => document.querySelector(`.cell[data-item="${CSS.escape(id)}"]`) || fallback;
 function finishDrag(ev, dropped) {
-  const { it, el, cell } = drag;
+  const { it, el } = drag;
+  const cell = liveCell(it.id, drag.cell);
   const spot = spotOnScreen(it);
   hideGhost();
+  net.hold(it.id, false);
   const tray = $("tray").getBoundingClientRect();
   const overTray = ev.clientX >= tray.left && ev.clientX <= tray.right && ev.clientY >= tray.top && ev.clientY <= tray.bottom;
   if (dropped && !overTray && Math.hypot(ev.clientX - spot.x, ev.clientY - spot.y) <= spot.radius) {
@@ -620,25 +651,40 @@ function finishDrag(ev, dropped) {
     setTimeout(() => el.remove(), 200);
     drag = null;
     land(it);
+    sendPlace(it);
     return;
   }
   // not there yet: the thumbnail floats home, nothing else happens
+  drag = null;
+  floatHome(el, it.id, cell, dropped);
+}
+/** A thumbnail drifts back to its tile in the tray, then disappears. */
+function floatHome(el, id, cell, soundIt) {
+  cell = liveCell(id, cell);
   const home = cell.getBoundingClientRect();
   el.classList.add("back");
   requestAnimationFrame(() => {
     el.style.transform = `translate(${home.left + home.width / 2 - 42}px, ${home.top + home.height / 2 - 42}px) scale(0.7)`;
   });
   let home_ = false;
-  const done = () => { if (home_) return; home_ = true; el.remove(); cell.classList.remove("lifted"); if (dropped) tock(true); };
+  const done = () => { if (home_) return; home_ = true; el.remove(); liveCell(id, cell).classList.remove("lifted"); if (soundIt) tock(true); };
   if (reduced.matches) done(); else { el.addEventListener("transitionend", done, { once: true }); setTimeout(done, 450); }
+}
+/** Someone else's drop beat ours: the drag ends quietly and the thumbnail goes home. */
+function cancelDrag() {
+  if (!drag) return;
+  const { it, el, cell } = drag;
+  drag.unlisten();
+  hideGhost();
+  net.hold(it.id, false);
   drag = null;
+  floatHome(el, it.id, cell, false);
 }
 
 // ---- landing: drop, squash, settle ----------------------------------------
 const anims = [];
 function land(it) {
   placed.add(it.id);
-  save();
   it.obj.visible = true;
   if (!reduced.matches) {
     const h = new THREE.Box3().setFromObject(it.obj).getSize(new THREE.Vector3()).y;
@@ -695,6 +741,14 @@ function cellFor(it) {
   const far = it.scope && view().kind === "zone";
   const state = placed.has(it.id) ? "placed" : parent && !placed.has(parent.id) ? "locked" : far ? "far" : "open";
   if (state !== "open") cell.classList.add(state);
+  cell.dataset.item = it.id;
+  if (drag && drag.it.id === it.id) cell.classList.add("lifted");
+  const heldHere = state !== "placed" && heldByOthers(it.id);
+  if (heldHere) {
+    cell.classList.add("held");
+    const dot = document.createElement("span"); dot.className = "held-dot"; dot.setAttribute("aria-label", T().holding);
+    cell.append(dot);
+  }
   let img;
   if (thumbs.has(it.id)) { img = document.createElement("img"); img.src = thumbs.get(it.id); }
   else { img = document.createElement("img"); img.className = "noimg"; img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"; }
@@ -715,7 +769,7 @@ function cellFor(it) {
   }
   if (!thumbs.has(it.id)) { const q = thumbQueue.indexOf(it.id); if (q > 0) thumbQueue.unshift(...thumbQueue.splice(q, 1)); }
   if (state === "open") cell.addEventListener("pointerdown", (e) => startPending(e, it, cell));
-  cell.title = L(it.label);
+  cell.title = heldHere ? `${L(it.label)} · ${T().holding}` : L(it.label);
   return { cell, order: { open: 0, far: 1, locked: 2 }[state] ?? 3 };
 }
 function row(label, prog, onClick, disabledNote) {
@@ -735,7 +789,6 @@ function crumbLabel(v) {
   if (v.kind === "zone") return L(LEVELS[v.level].zones[v.zone].label);
   return L(items.get(v.id).label);
 }
-let confirming = false;
 const layerPref = new Map();
 function renderUI() {
   const t = T(), v = view();
@@ -832,23 +885,7 @@ function renderUI() {
       body.append(sec);
     }
   }
-  // start over, with an inline two-step confirm
-  const foot = $("tray-foot");
-  foot.replaceChildren();
-  const btn = (txt, fn) => { const b = document.createElement("button"); b.type = "button"; b.className = "linkish-btn"; b.textContent = txt; b.addEventListener("click", fn); return b; };
-  if (!confirming) foot.append(btn(t.restart, () => { confirming = true; renderUI(); }));
-  else {
-    const s = document.createElement("span"); s.textContent = t.sure;
-    foot.append(s, btn(t.yes, startOver), btn(t.no, () => { confirming = false; renderUI(); }));
-  }
-}
-function startOver() {
-  confirming = false;
-  placed.clear();
-  save();
-  anims.length = 0;
-  for (const it of items.values()) { it.obj.visible = false; it.obj.position.y = it.base.y; it.obj.scale.copy(it.base.scale); }
-  go([{ kind: "building" }]);
+  renderPresence();
 }
 $("back").addEventListener("click", goBack);
 $("mute").addEventListener("click", () => {
@@ -898,6 +935,155 @@ $("lang-toggle").addEventListener("click", () => {
   try { localStorage.setItem(LANG_KEY, lang); } catch {}
   renderUI();
 });
+
+// ---- together: the shared shop ---------------------------------------------
+/** item id → Set of other clients holding it right now */
+const held = new Map();
+const heldByOthers = (id) => (held.get(id)?.size ?? 0) > 0;
+/** drops the server hasn't confirmed because the network failed: retried quietly */
+const retry = new Set();
+/** drops on their way to the server right now */
+const inflight = new Set();
+let retryTimer = 0, retryWait = 2000;
+
+/** A placed item arriving from elsewhere (or from a quiet retry): same drop, squash and sound. */
+function landRemote(id) {
+  const it = items.get(id);
+  if (!it || placed.has(id)) return;
+  if (drag && drag.it.id === id) cancelDrag(); // first drop wins
+  land(it);
+}
+/** Our drop didn't reach the server: the thing lifts out again and its thumbnail drifts home. */
+function revert(it) {
+  for (const x of [it, ...descendants(it.id)]) {
+    if (!placed.has(x.id)) continue;
+    placed.delete(x.id);
+    for (let i = anims.length - 1; i >= 0; i--) if (anims[i].it === x) anims.splice(i, 1);
+    x.obj.visible = false; x.obj.position.y = x.base.y; x.obj.scale.copy(x.base.scale);
+  }
+  renderUI();
+  const spot = spotOnScreen(it);
+  const el = document.createElement(thumbs.has(it.id) ? "img" : "div");
+  if (thumbs.has(it.id)) el.src = thumbs.get(it.id);
+  el.className = "dragging-thumb";
+  el.style.transform = `translate(${spot.x - 42}px, ${spot.y - 42}px) scale(0.6)`;
+  document.body.append(el);
+  floatHome(el, it.id, null, true);
+}
+async function sendPlace(it) {
+  inflight.add(it.id);
+  const r = await net.place(it.id);
+  inflight.delete(it.id);
+  if (r === "ok" || r === "taken") { retry.delete(it.id); return; } // taken: the other person put it there first, it's placed either way
+  if (r === "full") { revert(it); return; }
+  if (placed.has(it.id) && !retry.has(it.id)) revert(it);
+  retry.add(it.id);
+  scheduleRetry();
+}
+function scheduleRetry() {
+  clearTimeout(retryTimer);
+  if (!retry.size) { retryWait = 2000; return; }
+  retryTimer = setTimeout(async () => {
+    for (const id of [...retry]) {
+      if (placed.has(id)) { retry.delete(id); continue; }
+      const it = items.get(id);
+      if (it.parent && !placed.has(it.parent)) continue; // wait for what it sits on
+      const r = await net.place(id);
+      if (r === "ok" || r === "taken") { retry.delete(id); landRemote(id); } // the "placed" event may beat us; landRemote is idempotent
+      else if (r === "full") retry.delete(id);
+    }
+    retryWait = Math.min(30000, retryWait * 2);
+    scheduleRetry();
+  }, retryWait);
+}
+
+const net = connect(shop, me, {
+  hello({ placed: list, present: n }) {
+    // the server's list is the truth: add what's missing, take back what it never got
+    const server = new Set(list);
+    for (const id of list) landRemote(id);
+    for (const id of [...placed]) {
+      if (server.has(id) || retry.has(id) || inflight.has(id)) continue;
+      const it = items.get(id);
+      if (it) { placed.delete(id); it.obj.visible = false; }
+    }
+    held.clear(); // anyone still holding re-announces nothing, so start clean
+    present = n;
+    retryWait = 2000; scheduleRetry();
+    renderUI();
+  },
+  placed({ item }) { retry.delete(item); landRemote(item); },
+  hold({ item, client, holding }) {
+    if (client === me || !items.has(item)) return;
+    const s = held.get(item) || new Set();
+    if (holding) s.add(client); else s.delete(client);
+    if (s.size) held.set(item, s); else held.delete(item);
+    renderUI();
+  },
+  presence({ present: n }) { present = n; renderPresence(); },
+});
+
+// soft glowing dots where someone else is reaching, only for what's on screen at this zoom
+const holdDots = new Map();
+const holdDotMat = (() => {
+  const c = document.createElement("canvas"); c.width = c.height = 64;
+  const g = c.getContext("2d");
+  const halo = g.createRadialGradient(32, 32, 2, 32, 32, 30);
+  halo.addColorStop(0, "rgba(255,236,200,0.95)"); halo.addColorStop(0.4, "rgba(255,200,120,0.45)"); halo.addColorStop(1, "rgba(255,200,120,0)");
+  g.fillStyle = halo; g.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, sizeAttenuation: false });
+})();
+function stepHoldDots(now) {
+  const lv = viewLevel();
+  for (const [id, dot] of holdDots) {
+    if (!heldByOthers(id) || placed.has(id)) { scene.remove(dot.s); dot.s.material.dispose(); holdDots.delete(id); }
+  }
+  for (const id of held.keys()) {
+    const it = items.get(id);
+    const inView = lv !== null && it.level === lv && !placed.has(id);
+    let dot = holdDots.get(id);
+    if (!dot) {
+      if (!inView) continue;
+      const s = new THREE.Sprite(holdDotMat.clone()); s.renderOrder = 11; scene.add(s);
+      const b = new THREE.Box3().setFromObject(it.obj);
+      dot = { s, at: b.getCenter(new THREE.Vector3()) };
+      holdDots.set(id, dot);
+    }
+    dot.s.visible = inView;
+    const k = 0.05 * (free.h / Math.max(1, free.fullH)) * (reduced.matches ? 1 : 1 + 0.12 * Math.sin(now / 480));
+    dot.s.scale.set(k, k, 1);
+    dot.s.position.copy(dot.at);
+    dot.s.material.opacity = reduced.matches ? 0.8 : 0.65 + 0.25 * Math.sin(now / 480);
+  }
+}
+
+// presence + invite: quiet when someone's here, more visible when you're alone
+const link = shopUrl(shop);
+async function copyLink(btn) {
+  try { await navigator.clipboard.writeText(link); }
+  catch { const i = $("invite-link"); i.hidden = false; i.select(); try { document.execCommand("copy"); } catch {} }
+  const old = btn.textContent;
+  btn.textContent = T().copied;
+  setTimeout(() => { btn.textContent = old; renderPresence(); }, 1400);
+}
+function renderPresence() {
+  const t = T(), alone = present <= 1;
+  $("presence").hidden = alone;
+  $("presence").textContent = alone ? "" : t.present(present);
+  $("invite-small").hidden = alone;
+  if ($("invite-small").textContent !== t.copied) $("invite-small").textContent = t.inviteShort;
+  $("invite-small").title = t.invite;
+  $("invite-card").hidden = !alone;
+  $("invite-title").textContent = t.invite;
+  $("invite-note").textContent = t.inviteNote;
+  $("invite-link").value = link;
+  if ($("invite-copy").textContent !== t.copied) $("invite-copy").textContent = t.copy;
+}
+$("invite-copy").addEventListener("click", (e) => copyLink(e.currentTarget));
+$("invite-small").addEventListener("click", (e) => copyLink(e.currentTarget));
+$("invite-link").addEventListener("focus", (e) => e.currentTarget.select());
+addEventListener("pagehide", () => { if (drag) net.hold(drag.it.id, false); net.close(); });
 
 // ---- loop --------------------------------------------------------------------
 let lastSize = "";
@@ -949,6 +1135,7 @@ function tick(now) {
   stepAnims(now);
   stepGlow(now);
   stepMarker(now);
+  stepHoldDots(now);
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }
@@ -957,7 +1144,7 @@ applyCut();
 { const f = frame(view()); camera.position.copy(f.p); look.copy(f.t); }
 renderUI();
 // read-only handle for poking at the page from devtools, only with ?debug
-if (debug) globalThis.__play = { camera, free: () => free, items, placed, spot: (id) => spotOnScreen(items.get(id)), path: () => path, go, frame };
+if (debug) globalThis.__play = { held, camera, free: () => free, items, placed, spot: (id) => spotOnScreen(items.get(id)), path: () => path, go, frame };
 if (!hintSeen) showHint();
 if (devTags) console.info("[play] dev fallback tags are active (no zone tags found)");
 requestAnimationFrame(tick);
