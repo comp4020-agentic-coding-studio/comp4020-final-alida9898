@@ -2,13 +2,12 @@
 // behind it, the pastry case, and the entrance by the door. Coords storey-local (cm).
 //
 // Layout (top view):
-//   counter      L-shaped bar (one item): main run x 45…295, z 122…178, plus a return along the
-//                right wall x 240…295, z 178…258; top y 95. Staff side behind/inside the L.
-//                On it ONLY: pastry case (left end), espresso machine, grinder; pour-over on the return.
+//   counter      straight bar x 45…295, z 122…178, top y 95; staff side behind it.
+//                On it ONLY: pastry case (left end), espresso machine, grinder, pour-over.
 //                No bar chairs: barFront walkway z 225…300 stays clear.
 //   back wall    one wall shelf with five bean jars (the statement wall) + menu board.
 //   entrance     door on the right wall (z 330…430): doormat inside it, OPEN sign + umbrella stand
-//                + A-frame between the return and the door. Nothing beyond z 420.
+//                + A-frame between the counter and the door. Nothing beyond z 420.
 import { TIERS as SHELF_TIERS, DEPTH as SHELF_DEPTH } from "../../clay/models/wall-shelf.js";
 import { FLOORS as CASE_FLOORS } from "../../clay/models/pastry-case.js";
 import { INNER_Y as STAND_INNER } from "../../clay/models/umbrella-stand.js";
@@ -24,17 +23,17 @@ export async function populate({ kit, group, model, place }) {
   };
   const item = async (name, opts, at, tag) => add(await model(name, { name: tag.id, ...opts }), at, tag);
 
-  // ---------------------------------------------------------------- counter (L: main run + return)
-  const TOP = 95, CZ = 150, RX = 267.5;
-  await item("counter-l", { width: 250, ret: 80 }, { x: 170, y: 0, z: CZ },
+  // ---------------------------------------------------------------- counter
+  const TOP = 95, CZ = 150;
+  await item("counter", { width: 250 }, { x: 170, y: 0, z: CZ },
     { id: "l0-bar-counter", label: L("吧台", "Counter"), focus: true });
   const on = { parent: "l0-bar-counter", layer: 2 };
 
-  await item("coffee-machine", {}, { x: 160, y: TOP, z: CZ - 10 },
+  await item("coffee-machine", {}, { x: 150, y: TOP, z: CZ - 10 },
     { id: "l0-bar-machine", ...on, label: L("咖啡机", "Espresso machine") });
-  await item("grinder", {}, { x: 230, y: TOP, z: CZ - 12 },
+  await item("grinder", {}, { x: 212, y: TOP, z: CZ - 12 },
     { id: "l0-bar-grinder", ...on, label: L("磨豆机", "Grinder") });
-  await item("pour-over", {}, { x: RX, y: TOP, z: 222, turn: -90 },
+  await item("pour-over", {}, { x: 262, y: TOP, z: CZ - 10 },
     { id: "l0-bar-pour-over", ...on, label: L("手冲滤杯", "Pour-over") });
 
   // ---------------------------------------------------------------- pastry case (left end of the counter)

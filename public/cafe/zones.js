@@ -53,8 +53,8 @@ export const LEVELS = [
           { id: "main", x: [40, 300], y: [0, 280], z: [0, 300] },
           { id: "door", x: [180, 300], y: [0, 280], z: [300, 420] },
         ],
-        notes: "FOCAL. L-shaped counter: main run x 45…295, z 122…178, return along the right wall x 240…295, " +
-          "z 178…258 (no counter chairs). Bean-jar wall shelf + menu board on the back wall. Entrance by the door " +
+        notes: "FOCAL. Straight counter x 45…295, z 122…178 (no counter chairs)." +
+          " Bean-jar wall shelf + menu board on the back wall. Entrance by the door " +
           "(right wall z 330–430): OPEN sign, doormat, umbrella stand, A-frame — all inside, z ≤ 420.",
       },
       window: {
