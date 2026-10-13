@@ -189,3 +189,24 @@ body.play #house { position: absolute; inset: 0; width: 100%; height: 100%; }
 .quota-note { margin: 0 0 8px; padding: 6px 10px; border-radius: 10px; background: var(--paper-2); color: var(--ink); line-height: 1.45; }
 .cell.spent { filter: grayscale(1); opacity: 0.45; cursor: default; }
 .crumbs .crumb-town { color: inherit; }
+
+/* help requests (world shops): the owner's flags, a guest's warm "asked" tiles */
+.ptray-head-end { display: flex; align-items: baseline; gap: 6px; }
+.ask-btn {
+  font: inherit; font-size: 0.85rem; line-height: 1; color: var(--ink-soft); background: var(--card);
+  border: 1.5px dashed var(--stitch); border-radius: 999px; padding: 0.2em 0.5em; cursor: pointer;
+}
+.ask-btn.on { border-style: solid; background: #fde6c4; color: var(--ink); }
+.ask-btn:hover { background: var(--paper-2); }
+.req-flag { font-size: 0.7rem; margin-right: 0.3em; }
+.cell .req-flag { position: absolute; top: 3px; right: 5px; margin: 0; }
+.cell.placed .req-flag { right: 18px; }
+.cell.asked { box-shadow: 0 0 0 2px #f2b766, 0 0 10px rgba(242, 183, 102, 0.55); }
+.cell .asked-tag { font-size: 0.6rem; line-height: 1.2; text-align: center; color: #9a5a1c; }
+.ptray .row.asked { border-color: #e8a04a; }
+.req-hint { margin: 0 0 8px; color: var(--ink-soft); font-style: italic; }
+.req-note { margin: 0 0 8px; padding: 6px 10px; border-radius: 10px; background: #fde6c4; color: var(--ink); transition: opacity 0.8s ease; }
+.req-note.fading { opacity: 0; }
+.note-chip { max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-soft); }
+@media (max-width: 700px) { .note-chip { max-width: 7em; } }
+@media (prefers-reduced-motion: reduce) { .req-note { transition: none; } }

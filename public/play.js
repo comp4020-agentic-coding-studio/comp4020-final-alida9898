@@ -47,6 +47,9 @@ const TEXT = {
     leftToday: (n) => `今天还能帮 ${n} 件`, enough: "今天帮够啦，明天再来",
     townsDone: "今天已经帮了 3 个小镇啦，明天再来",
     inviteTown: "邀请朋友来帮忙", inviteTownNote: "把这个链接发给朋友：他们每天能帮你放 8 件东西。",
+    askHere: "请朋友帮这一块", askOn: "已请朋友帮这一块（再点取消）",
+    askedLabel: "朋友想请你帮忙", reqHint: "右键或长按一件，单独请朋友帮忙",
+    reqDoneGuest: (x) => `帮朋友摆好了${x}`, reqDoneOwner: (x) => `朋友帮你摆好了${x}`,
   },
   en: {
     brand: "A Corner of Town", toggle: "中文", cafe: "Café", back: "‹ Back", loading: "Shaping the café out of clay…",
@@ -73,6 +76,9 @@ const TEXT = {
     leftToday: (n) => `${n} left today`, enough: "That's enough for today — come back tomorrow",
     townsDone: "You've helped 3 towns today — come back tomorrow",
     inviteTown: "Invite a friend to help", inviteTownNote: "Send this link to a friend: they can place up to 8 things a day for you.",
+    askHere: "Ask friends to help here", askOn: "Friends asked to help here (tap to undo)",
+    askedLabel: "Your friend asked for help", reqHint: "Right-click or long-press a thing to ask for help with just that one",
+    reqDoneGuest: (x) => `You finished the ${x} for your friend`, reqDoneOwner: (x) => `A friend finished the ${x}`,
   },
 };
 const LANG_KEY = "lang";
@@ -205,6 +211,7 @@ const count = (list) => ({ done: list.filter((it) => placed.has(it.id)).length, 
 const levelItems = (level) => [...items.values()].filter((it) => it.level === level);
 
 // ---- views -----------------------------------------------------------------
+// (request targets are built once items + zones are known: see buildReqTargets())
 // path[0] = building; then { kind: "storey", level } → { kind: "zone", level, zone } → { kind: "item", id } …
 let path = [{ kind: "building" }];
 const view = () => path[path.length - 1];
@@ -222,6 +229,83 @@ function zoneBoxes(level, zone) {
 const storeyBox = (level) => isYard(level)
   ? new THREE.Box3(new THREE.Vector3(YARD.box.x[0], 0, YARD.box.z[0]), new THREE.Vector3(YARD.box.x[1], 230, YARD.box.z[1]))
   : new THREE.Box3(new THREE.Vector3(ROOM.x[0], levelY(level), ROOM.z[0]), new THREE.Vector3(ROOM.x[1], levelY(level) + 270, ROOM.z[1]));
+// ---- help requests (world shops): the owner marks parts for friends to help with
+// ids (server/SHOPS.md, `^[a-z0-9-]{1,64}$`), all built from the play page's own names:
+//   zone  → `<area>-<zone>`         area = `l<level>` or `yard`   e.g. l0-bar, l1-reading, yard-garden
+//   piece → the focus piece's item id: it + everything on it, e.g. l0-bar-pastry-case
+//   item  → the item's id: one thing, e.g. l0-bar-croissant
+// (item ids are unique in a shop and already carry their level + zone, and the scope
+// tells a piece mark from an item mark on the same id)
+// Requests are hints only: nothing here ever stops a placement.
+const reqOn = !!worldShop; // open shops (no role) get no request UI at all
+const owner = reqOn && worldShop.role === "owner";
+const rid = (x) => String(x).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "x";
+const areaId = (level) => (isYard(level) ? "yard" : `l${level}`);
+const zoneReqId = (level, zone) => rid(`${areaId(level)}-${zone}`);
+const pieceReqId = (it) => rid(it.id);
+const itemReqId = (it) => rid(it.id);
+const rkey = (scope, id) => `${scope}:${id}`;
+/** "scope:id" → { scope, id, label, level, zone, piece?, item?, covered: items } */
+const reqTargets = new Map();
+function buildReqTargets() {
+  for (const a of areas) for (const [zone, z] of Object.entries(areaZones(a.level))) {
+    const id = zoneReqId(a.level, zone);
+    reqTargets.set(rkey("zone", id), { scope: "zone", id, label: z.label, level: a.level, zone, covered: zoneItems(a.level, zone) });
+  }
+  for (const it of items.values()) {
+    if (it.focus && it.children.length) {
+      const id = pieceReqId(it);
+      reqTargets.set(rkey("piece", id), { scope: "piece", id, label: it.label, level: it.level, zone: it.zone, piece: it.id, covered: [it, ...descendants(it.id)] });
+    }
+    const id = itemReqId(it);
+    reqTargets.set(rkey("item", id), { scope: "item", id, label: it.label, level: it.level, zone: it.zone, item: it.id, covered: [it] });
+  }
+}
+let requests = []; // [{ scope, id }] as the server has them
+let note = null;
+const reqDone = new Map(); // "scope:id" → done, to notice the moment one completes
+const reqComplete = (r) => r.covered.length > 0 && r.covered.every((it) => placed.has(it.id));
+/** Known requests that still matter: the owner sees every mark; a guest only what's left to do. */
+const liveReqs = () => requests.map((r) => reqTargets.get(rkey(r.scope, r.id))).filter((r) => r && (owner || !reqComplete(r)));
+const hasReq = (scope, id) => requests.some((r) => r.scope === scope && r.id === id);
+const reqCovers = (r, it) => r.covered.includes(it);
+const itemAsked = (it) => liveReqs().some((r) => reqCovers(r, it));
+const zoneAsked = (level, zone) => liveReqs().some((r) => r.level === level && r.zone === zone);
+const areaAsked = (level) => liveReqs().some((r) => r.level === level);
+function setRequests(list) {
+  requests = Array.isArray(list) ? list.filter((r) => r && typeof r.id === "string") : [];
+  checkReqDone(false);
+}
+/** Compare each request against last time; `announce` shows the note for one that just completed. */
+function checkReqDone(announce) {
+  const seen = new Set();
+  for (const r of requests) {
+    const k = rkey(r.scope, r.id), t = reqTargets.get(k);
+    if (!t) continue;
+    seen.add(k);
+    const done = reqComplete(t);
+    if (announce && done && reqDone.get(k) === false) showReqNote((owner ? T().reqDoneOwner : T().reqDoneGuest)(L(t.label)));
+    reqDone.set(k, done);
+  }
+  for (const k of [...reqDone.keys()]) if (!seen.has(k)) reqDone.delete(k);
+}
+let reqNoteTimer = 0;
+function showReqNote(text) {
+  const el = $("req-note");
+  el.textContent = text; el.hidden = false; el.classList.remove("fading");
+  clearTimeout(reqNoteTimer);
+  reqNoteTimer = setTimeout(() => { el.classList.add("fading"); reqNoteTimer = setTimeout(() => { el.hidden = true; }, reduced.matches ? 0 : 800); }, 5000);
+}
+async function toggleReq(scope, id) {
+  if (!owner) return;
+  const on = !hasReq(scope, id);
+  // show it at once; the server's answer (and its SSE) is the truth
+  setRequests(on ? [...requests, { scope, id }] : requests.filter((r) => !(r.scope === scope && r.id === id)));
+  renderUI();
+  const list = await net.setRequest(scope, id, on);
+  if (list) setRequests(list);
+  renderUI();
+}
 function itemBox(id) {
   const b = new THREE.Box3().setFromObject(items.get(id).obj);
   const indoor = !isYard(items.get(id).level);
@@ -565,6 +649,61 @@ canvas.addEventListener("pointerup", (e) => {
 });
 addEventListener("keydown", (e) => { if (e.key === "Escape" && !drag) goBack(); });
 
+// ---- requested parts glow softly for a guest (the hover box's warm style, a little stronger)
+const reqGlow = [];
+function renderReqGlow() {
+  for (const m of reqGlow) scene.remove(m);
+  reqGlow.length = 0;
+  if (!reqOn || owner) return;
+  const v = view(), lv = viewLevel(v), zn = viewZone(v), boxes = [];
+  for (const r of liveReqs()) {
+    if (v.kind === "building") boxes.push(storeyBox(r.level));
+    else if (r.level !== lv) continue;
+    else if (v.kind === "storey") boxes.push(zoneBoxes(r.level, r.zone).reduce((a, b) => a.union(b)));
+    else if (r.zone !== zn) continue;
+    else if (r.scope === "zone") boxes.push(viewBox({ kind: "zone", level: r.level, zone: r.zone }));
+    else if (r.scope === "piece") boxes.push(new THREE.Box3().setFromObject(items.get(r.piece).obj));
+    else if (!placed.has(r.item)) boxes.push(new THREE.Box3().setFromObject(items.get(r.item).obj).expandByScalar(3));
+  }
+  const seen = new Set();
+  for (const b of boxes) {
+    const k = [b.min.toArray(), b.max.toArray()].join();
+    if (b.isEmpty() || seen.has(k)) continue;
+    seen.add(k);
+    const m = new THREE.Mesh(hoverBox.geometry, new THREE.MeshBasicMaterial({ color: 0xffc46b, transparent: true, opacity: 0.08, depthWrite: false }));
+    m.add(new THREE.LineSegments(hoverEdges.geometry, new THREE.LineBasicMaterial({ color: 0xe8963a, transparent: true, opacity: 0.7 })));
+    b.getCenter(m.position); b.getSize(m.scale); m.renderOrder = 4;
+    scene.add(m); reqGlow.push(m);
+  }
+}
+function stepReqGlow(now) {
+  const k = reduced.matches ? 0.5 : 0.5 + 0.5 * Math.sin(now / 700);
+  for (const m of reqGlow) { m.material.opacity = 0.05 + 0.06 * k; m.children[0].material.opacity = 0.45 + 0.35 * k; }
+}
+
+// ---- the owner marks one thing: right-click, or a ~500 ms long-press on touch
+const REQ_HINT_KEY = "cafe-req-hint-seen-v1";
+let reqHintSeen = false;
+try { reqHintSeen = localStorage.getItem(REQ_HINT_KEY) === "1"; } catch {}
+let pressFired = null; // pointerId whose long-press fired (so it never becomes a drag)
+function reqGesture(cell, it) {
+  const fire = () => {
+    toggleReq("item", itemReqId(it));
+    if (!reqHintSeen) { reqHintSeen = true; try { localStorage.setItem(REQ_HINT_KEY, "1"); } catch {} }
+  };
+  cell.addEventListener("contextmenu", (e) => { e.preventDefault(); if (pressFired !== null) return; fire(); });
+  cell.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse") return;
+    const x = e.clientX, y = e.clientY, id = e.pointerId;
+    pressFired = null;
+    const timer = setTimeout(() => { if (!drag) { pressFired = id; fire(); } }, 500);
+    const off = () => { clearTimeout(timer); removeEventListener("pointermove", mv); removeEventListener("pointerup", up); removeEventListener("pointercancel", up); };
+    const mv = (ev) => { if (ev.pointerId === id && Math.hypot(ev.clientX - x, ev.clientY - y) > 8) off(); };
+    const up = (ev) => { if (ev.pointerId !== id) return; off(); setTimeout(() => { if (pressFired === id) pressFired = null; }, 400); };
+    addEventListener("pointermove", mv); addEventListener("pointerup", up); addEventListener("pointercancel", up);
+  });
+}
+
 // ---- thumbnails: each item rendered once, through the one renderer ---------
 const THUMB = 112;
 const thumbs = new Map();
@@ -680,6 +819,7 @@ function startPending(e, it, cell) {
   const sheet = getComputedStyle(cell).touchAction === "pan-x";
   const move = (ev) => {
     if (ev.pointerId !== pend.id) return;
+    if (pressFired === pend.id) return stop(); // a long-press asked for help: no drag
     const dx = ev.clientX - pend.x, dy = ev.clientY - pend.y;
     if (Math.hypot(dx, dy) < (ev.pointerType === "mouse" ? 4 : 8)) return;
     // touch: the tray scrolls along one axis, dragging out goes along the other
@@ -778,6 +918,7 @@ function cancelDrag() {
 const anims = [];
 function land(it) {
   placed.add(it.id);
+  if (reqOn) checkReqDone(true);
   it.obj.visible = true;
   if (!reduced.matches) {
     const h = new THREE.Box3().setFromObject(it.obj).getSize(new THREE.Vector3()).y;
@@ -867,12 +1008,25 @@ function cellFor(it) {
   if (state === "open" && spent()) cell.classList.add("spent");
   else if (state === "open") cell.addEventListener("pointerdown", (e) => startPending(e, it, cell));
   cell.title = heldHere ? `${L(it.label)} · ${T().holding}` : L(it.label);
-  return { cell, order: { open: 0, far: 1, locked: 2 }[state] ?? 3 };
+  let asked = false;
+  if (owner) {
+    // the owner's own marks: this one thing, or this piece (and what's on it)
+    if (hasReq("item", itemReqId(it)) || (it.focus && hasReq("piece", pieceReqId(it)))) cell.append(flag());
+    reqGesture(cell, it);
+  } else if (reqOn && state !== "placed" && itemAsked(it)) {
+    asked = true;
+    cell.classList.add("asked");
+    cell.append(flag());
+    const tag = document.createElement("span"); tag.className = "asked-tag"; tag.textContent = T().askedLabel; cell.append(tag);
+  }
+  return { cell, order: { open: 0, far: 1, locked: 2 }[state] ?? 3, asked };
 }
-function row(label, prog, onClick, disabledNote) {
+const flag = () => { const f = document.createElement("span"); f.className = "req-flag"; f.textContent = "🚩"; f.setAttribute("aria-hidden", "true"); return f; };
+function row(label, prog, onClick, disabledNote, asked = false) {
   const b = document.createElement("button");
-  b.type = "button"; b.className = "row";
+  b.type = "button"; b.className = "row" + (asked ? " asked" : "");
   const a = document.createElement("span"); a.textContent = label;
+  if (asked) a.prepend(flag());
   const c = document.createElement("span"); c.className = "small";
   c.textContent = disabledNote || (prog.total ? `${prog.done} / ${prog.total}` : "");
   if (prog.total && prog.done === prog.total) b.classList.add("done");
@@ -916,6 +1070,11 @@ function renderUI() {
     if (i === path.length - 1) { const s = document.createElement("span"); s.className = "here"; s.textContent = crumbLabel(p); crumbs.append(s); }
     else { const b = document.createElement("button"); b.type = "button"; b.textContent = crumbLabel(p); b.addEventListener("click", () => go(path.slice(0, i + 1))); crumbs.append(b); }
   });
+  $("ask-btn").hidden = true;
+  $("req-hint").hidden = true;
+  $("note-chip").hidden = !(reqOn && !owner && note);
+  if (reqOn && !owner && note) $("note-chip").textContent = `📌 ${note}`;
+  renderReqGlow();
   // tray
   const body = $("tray-body");
   body.replaceChildren();
@@ -928,15 +1087,19 @@ function renderUI() {
     $("tray-hint").textContent = t.hintBuilding;
     $("tray-progress").textContent = all.total ? `${all.done} / ${all.total}` : "";
     const rows = document.createElement("div"); rows.className = "rows";
-    for (const s of areas) rows.append(row(areaName(s.level), count(levelItems(s.level)), () => goInto({ kind: "storey", level: s.level })));
+    const list = areas.map((s) => ({ s, asked: reqOn && areaAsked(s.level) }));
+    if (!owner) list.sort((a, b) => b.asked - a.asked);
+    for (const { s, asked } of list) rows.append(row(areaName(s.level), count(levelItems(s.level)), () => goInto({ kind: "storey", level: s.level }), undefined, asked));
     body.append(rows);
   } else if (v.kind === "storey") {
     $("tray-hint").textContent = t.hintStorey;
     const lp = count(levelItems(v.level));
     $("tray-progress").textContent = lp.total ? `${lp.done} / ${lp.total}` : "";
     const rows = document.createElement("div"); rows.className = "rows";
-    for (const [zone, z] of Object.entries(areaZones(v.level))) {
-      rows.append(row(L(z.label), count(zoneItems(v.level, zone)), () => goInto({ kind: "zone", level: v.level, zone })));
+    const list = Object.entries(areaZones(v.level)).map(([zone, z]) => ({ zone, z, asked: reqOn && zoneAsked(v.level, zone) }));
+    if (!owner) list.sort((a, b) => b.asked - a.asked);
+    for (const { zone, z, asked } of list) {
+      rows.append(row(L(z.label), count(zoneItems(v.level, zone)), () => goInto({ kind: "zone", level: v.level, zone }), undefined, asked));
     }
     body.append(rows);
   } else {
@@ -951,6 +1114,18 @@ function renderUI() {
     // focus view: just what sits on that piece
     const here = scope ? descendants(scope) : zoneItems(level, zone);
     $("tray-hint").textContent = here.length ? t.hintZone : t.hintEmpty;
+    if (owner) {
+      const [sc, id] = scope ? ["piece", pieceReqId(items.get(scope))] : ["zone", zoneReqId(level, zone)];
+      const on = hasReq(sc, id), b = $("ask-btn");
+      b.hidden = false;
+      b.textContent = on ? "🚩" : "⚑";
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", String(on));
+      b.title = b.ariaLabel = on ? t.askOn : t.askHere;
+      b.onclick = () => toggleReq(sc, id);
+      $("req-hint").hidden = reqHintSeen || !here.length;
+      $("req-hint").textContent = t.reqHint;
+    }
     const layers = [...new Set(here.map((it) => it.layer))].sort((a, b) => a - b);
     for (const ly of layers) {
       const list = here.filter((it) => it.layer === ly), lc = count(list), complete = lc.done === lc.total;
@@ -967,7 +1142,8 @@ function renderUI() {
       h.append(name, cnt);
       h.addEventListener("click", () => { layerPref.set(key, { complete, collapsed: !collapsed }); renderUI(); });
       const cells = document.createElement("div"); cells.className = "cells";
-      list.map(cellFor).sort((a, b) => a.order - b.order).forEach((c) => cells.append(c.cell));
+      // a guest sees what the owner asked for first within each layer
+      list.map(cellFor).sort((a, b) => (b.asked - a.asked) || (a.order - b.order)).forEach((c) => cells.append(c.cell));
       sec.append(h, cells);
       body.append(sec);
     }
@@ -1111,6 +1287,7 @@ function scheduleRetry() {
   }, retryWait);
 }
 
+if (reqOn) { buildReqTargets(); note = worldShop.note; setRequests(worldShop.requests); }
 const net = connect(shop, me, {
   hello({ placed: list, present: n }) {
     // the server's list is the truth: add what's missing, take back what it never got
@@ -1135,6 +1312,8 @@ const net = connect(shop, me, {
     renderUI();
   },
   presence({ present: n }) { present = n; renderPresence(); },
+  requests({ requests: list }) { if (!reqOn) return; setRequests(list); renderUI(); },
+  note({ note: n }) { if (!reqOn) return; note = n; renderUI(); },
   quota(q) { if (!guest) return; if (q.left < (quota?.left ?? 99)) helpedHere = true; quota = q; renderUI(); },
 }, worldShop ? { t: worldShop.t, helper } : {});
 
@@ -1256,6 +1435,7 @@ function tick(now) {
   stepGlow(now);
   stepMarker(now);
   stepHoldDots(now);
+  stepReqGlow(now);
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }
@@ -1264,7 +1444,7 @@ applyCut();
 { const f = frame(view()); camera.position.copy(f.p); look.copy(f.t); }
 renderUI();
 // read-only handle for poking at the page from devtools, only with ?debug
-if (debug) globalThis.__play = { held, camera, free: () => free, items, placed, spot: (id) => spotOnScreen(items.get(id)), path: () => path, go, frame, topOf, wallOf };
+if (debug) globalThis.__play = { requests: () => requests, toggleReq, held, camera, free: () => free, items, placed, spot: (id) => spotOnScreen(items.get(id)), path: () => path, go, frame, topOf, wallOf };
 // ---- a new season: one gentle card the first time this viewer sees it ---------
 const seasonItems = [...items.values()].filter((it) => it.season === season);
 let lastSeen = null;

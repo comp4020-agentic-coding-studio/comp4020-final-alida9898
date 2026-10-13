@@ -22,6 +22,7 @@
       <button id="back" class="back-btn" type="button" hidden></button>
       <nav id="crumbs" class="crumbs" aria-label="breadcrumb"></nav>
       <span class="bar-tools">
+        <span id="note-chip" class="note-chip small" hidden></span>
         <span id="quota" class="quota small" aria-live="polite" hidden></span>
         <span id="presence" class="presence small" aria-live="polite" hidden></span>
         <button id="invite-small" class="invite-small" type="button" hidden></button>
@@ -48,9 +49,14 @@
       <aside id="tray" class="ptray" aria-live="polite">
         <div class="ptray-head">
           <p id="tray-title" class="ptray-title"></p>
-          <p id="tray-progress" class="small ptray-progress"></p>
+          <span class="ptray-head-end">
+            <button id="ask-btn" class="ask-btn" type="button" aria-pressed="false" hidden></button>
+            <span id="tray-progress" class="small ptray-progress"></span>
+          </span>
         </div>
         <p id="tray-hint" class="small ptray-hint"></p>
+        <p id="req-hint" class="small req-hint" hidden></p>
+        <p id="req-note" class="small req-note" role="status" hidden></p>
         <p id="quota-note" class="small quota-note" role="status" hidden></p>
         <div id="tray-body" class="ptray-body"></div>
         <div id="tray-foot" class="ptray-foot small"></div>
