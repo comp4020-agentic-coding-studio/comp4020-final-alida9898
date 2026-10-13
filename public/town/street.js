@@ -188,6 +188,10 @@ async function buildProps(type, x) {
 
 export async function createStreet(container, { season = "spring", lang = "zh", shops = [], onPick = () => {}, padTop = 0, padLeft = 0 } = {}) {
   const look = LOOK[season] || LOOK.spring;
+  // ?editor (local dev): pick shops / trees / lamps / the cat and tune them by hand, see /editor.js
+  const editMode = new URLSearchParams(location.search).has("editor");
+  const editables = [];
+  let edit = null;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const r = kit.rng(11);
 
@@ -236,17 +240,30 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
     g.position.set(SHOP[type].x, 0, FRONT_Z - DEPTH / 2);
     g.userData.pick = type;
     scene.add(g); shopGroups[type] = g;
+    editables.push({ id: `shop-${type}`, label: `店铺 ${type}`, obj: g });
     scene.add(await buildProps(type, SHOP[type].x));
   }
 
+  const propList = [];   // trees and lamps you can poke (see "props" below)
   // ---- trees behind/between the shops and across the road, lamp posts on the kerb ----
   const trees = [[-1300, -260], [-600, -380], [0, -400], [600, -360], [1250, -300], [-1100, 620], [-200, 640], [700, 600], [1500, 640], [-1650, 300]];
   for (const [i, [x, z]] of trees.entries()) {
     const t = shadowed(buildTree(kit, { season, seed: 3 + i }));
     t.position.set(x, 0, z); t.rotation.y = r() * Math.PI * 2; t.scale.setScalar(0.85 + r() * 0.3); scene.add(t);
+    editables.push({ id: `tree-${i}`, label: `树 ${i}`, obj: t });
+    t.userData.prop = { kind: "tree", obj: t, shake: 0, rx: t.rotation.x, rz: t.rotation.z };
+    propList.push(t);
   }
-  for (const x of [-1200, -600, 0, 600, 1200]) {
+  for (const [i, x] of [-1200, -600, 0, 600, 1200].entries()) {
     const l = shadowed(buildLamp(kit, { name: "street-lamp" })); l.position.set(x, 0, ROAD_Z[0] - 18); scene.add(l);
+    editables.push({ id: `lamp-${i}`, label: `路灯 ${i}`, obj: l });
+    // give each lamp its own lantern material so one can glow alone, plus a light kept at 0
+    // (lights exist from the start, so switching one on never recompiles the shaders)
+    let glass = null;
+    l.traverse((o) => { if (o.isMesh && o.material?.color?.getHex() === 0xffd98f) { o.material = o.material.clone(); glass = o.material; } });
+    const bulb = new THREE.PointLight(0xffc970, 0, 520, 1.2); bulb.position.y = 171; l.add(bulb);
+    l.userData.prop = { kind: "lamp", obj: l, glass, bulb, glow: 0, hold: 0 };
+    propList.push(l);
   }
   if (look.scatter) {
     for (let i = 0; i < 120; i++) {
@@ -272,7 +289,8 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
   if (reduced) { anim.setPose("sit"); catHolder.position.set(doors[0] + 90, 6, WALK_Z + 20); catHolder.rotation.y = -Math.PI / 2 + 0.6; }
   else { anim.setPose("walk"); }
   function stepCat(dt) {
-    if (reduced) return;
+    if (reduced || edit) return; // the editor holds the cat still so it can be moved
+
     const w = walker;
     if (w.pause > 0) {
       w.pause -= dt;
@@ -325,15 +343,20 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
   let hover = null, dirty = true, alive = true;
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   const pickables = [...Object.values(shopGroups), catHolder];
-  function pickAt(e) {
+  // One raycast decides what is under the pointer: a shop / the cat (userData.pick, a string)
+  // or a prop (userData.prop: tree or lamp). Later "pick up the cat" can hook in here: a
+  // pointerdown on "cat" would start a carry instead of an orbit drag (see the drag code below).
+  function hitAt(e) {
     const rc = canvas.getBoundingClientRect();
     ndc.set((e.clientX - rc.left) / rc.width * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
-    const hit = ray.intersectObjects(pickables, true)[0];
+    const hit = ray.intersectObjects([...pickables, ...propList], true)[0];
     let o = hit?.object;
-    while (o && !o.userData.pick) o = o.parent;
-    return o?.userData.pick || null;
+    while (o && !o.userData.pick && !o.userData.prop) o = o.parent;
+    if (!o) return null;
+    return o.userData.pick ? { pick: o.userData.pick } : { prop: o.userData.prop };
   }
+  function pickAt(e) { return hitAt(e)?.pick || null; }
   function show(what) {
     if (what === hover) return;
     if (hover && shopGroups[hover]) shopGroups[hover].userData.lift = 0;
@@ -351,10 +374,19 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
     dirty = true;
   }
   let lastTouch = null;
-  canvas.addEventListener("pointermove", (e) => { if (e.pointerType === "mouse") show(pickAt(e)); });
+  canvas.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse" || editMode || drag) return;
+    const h = hitAt(e);
+    show(h?.pick || null);
+    if (h?.prop) canvas.style.cursor = "pointer";
+  });
   canvas.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") show(null); });
   canvas.addEventListener("click", (e) => {
-    const what = pickAt(e);
+    if (editMode) return; // no walking into shops while editing
+    if (dragged) { dragged = false; return; }   // that was a turn of the view, not a click
+    const h = hitAt(e);
+    if (h?.prop) { poke(h.prop); return; }
+    const what = h?.pick || null;
     const touch = lastPointerType !== "mouse";
     if (touch && what && what !== lastTouch) { lastTouch = what; show(what); return; }   // first tap: just say hello
     lastTouch = null;
@@ -364,6 +396,129 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
   let lastPointerType = "mouse";
   canvas.addEventListener("pointerdown", (e) => { lastPointerType = e.pointerType; });
 
+  // ---- turning the view: press and drag to orbit the street (no zoom) ----
+  // A press only becomes a drag after ~6px, so a plain click / tap still picks. To add
+  // "pick up the cat" later: on pointerdown, if hitAt(e)?.pick === "cat", start a carry
+  // here instead of an orbit and skip the orbit branch in pointermove.
+  let drag = null, dragged = false;
+  const view = { az: 0, elev: 0, dist: 2400, dAz: 0, dElev: 0, back: null };
+  const AZ = [-0.35, 1.35], EL = [0.14, 1.05];   // keep the shop fronts in sight, never under the ground
+  if (!editMode) canvas.style.touchAction = "none";
+  canvas.addEventListener("pointerdown", (e) => {
+    if (editMode || (e.pointerType === "mouse" && e.button !== 0)) return;
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, moving: false };
+    dragged = false;
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.moving) {
+      if (Math.hypot(dx, dy) < 6) return;
+      drag.moving = true; dragged = true; view.back = null;
+      try { canvas.setPointerCapture(e.pointerId); } catch {}
+      show(null); canvas.style.cursor = "grabbing";
+    }
+    drag.x = e.clientX; drag.y = e.clientY;
+    const h = canvas.clientHeight || 600;
+    setTurn(view.dAz - dx / h * 2.2, view.dElev + dy / h * 1.6);
+  });
+  const endDrag = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const moved = drag.moving; drag = null;
+    if (moved) { canvas.style.cursor = ""; if (e.type === "pointercancel") dragged = false; }
+  };
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", endDrag);
+  function setTurn(dAz, dElev) {
+    view.dAz = Math.min(AZ[1], Math.max(AZ[0], view.az + dAz)) - view.az;
+    view.dElev = Math.min(EL[1], Math.max(EL[0], view.elev + dElev)) - view.elev;
+    placeCamera();
+    resetBtn.hidden = Math.abs(view.dAz) < 1e-3 && Math.abs(view.dElev) < 1e-3;
+  }
+  function placeCamera() {
+    const az = view.az + view.dAz, el = view.elev + view.dElev;
+    camera.position.copy(TARGET).addScaledVector(new THREE.Vector3(-Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)), view.dist);
+    camera.lookAt(TARGET); camera.updateMatrixWorld();
+    dirty = true;
+  }
+  const RESET = { zh: "回到原位", en: "Reset view" };
+  const resetBtn = document.createElement("button");
+  resetBtn.type = "button"; resetBtn.className = "street-reset"; resetBtn.hidden = true;
+  resetBtn.textContent = RESET[lang] || RESET.zh;
+  resetBtn.addEventListener("click", () => { view.back = { az: view.dAz, el: view.dElev, t: 0 }; });
+  if (!editMode) container.append(resetBtn);
+  function stepView(dt) {
+    const b = view.back; if (!b) return;
+    b.t = Math.min(1, b.t + dt / (reduced ? 0.01 : 0.7));
+    const k = 1 - (1 - b.t) ** 3;
+    view.dAz = b.az * (1 - k); view.dElev = b.el * (1 - k);
+    placeCamera();
+    if (b.t >= 1) { view.back = null; view.dAz = view.dElev = 0; resetBtn.hidden = true; }
+  }
+
+  // ---- props: shake a tree (something falls, by season), light a lamp ----
+  const FALL = {
+    spring: { colors: [0xf7cfd8, 0xf2b8c6, 0xfbe3e8], n: 7, size: [5, 1, 4] },
+    summer: { colors: [0x6b9850, 0x7aa65a], n: 2, size: [6, 1.2, 4] },
+    autumn: { colors: [0xe0a23a, 0xd9822f, 0xf0c050], n: 7, size: [6, 1.2, 4.5] },
+    winter: { colors: [0xffffff, 0xf4f7fb], n: 10, size: [3.5, 3.5, 3.5] },
+  }[season] || null;
+  const bits = [];
+  function poke(p) {
+    if (p.kind === "lamp") { p.hold = 2.5; return; }
+    p.shake = 1; p.t = 0;
+    if (!FALL) return;
+    const n = reduced ? Math.min(2, FALL.n) : FALL.n;
+    const geo = new THREE.SphereGeometry(1, 8, 6);
+    const mats = FALL.colors.map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8, transparent: true }));
+    const s = p.obj.scale.x;
+    const group = { geo, mats, items: [], age: 0 };
+    for (let i = 0; i < n; i++) {
+      const m = new THREE.Mesh(geo, mats[i % mats.length]);
+      m.scale.set(...FALL.size);
+      const a = Math.random() * Math.PI * 2, rad = Math.random() * 80 * s;
+      m.position.set(p.obj.position.x + Math.cos(a) * rad, (210 + Math.random() * 90) * s, p.obj.position.z + Math.sin(a) * rad);
+      m.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+      m.userData.v = { vy: season === "winter" ? 60 : 35 + Math.random() * 20, ph: Math.random() * 6, spin: (Math.random() - 0.5) * 3, delay: Math.random() * 0.5 };
+      scene.add(m); group.items.push(m);
+    }
+    bits.push(group);
+  }
+  function stepProps(dt, now) {
+    let busy = false;
+    for (const t of propList) {
+      const p = t.userData.prop;
+      if (p.kind === "tree" && p.shake > 0) {
+        p.t += dt; p.shake = Math.max(0, 1 - p.t / 1.6);
+        const amp = (reduced ? 0.012 : 0.06) * p.shake * p.shake;
+        t.rotation.z = p.rz + Math.sin(p.t * 14) * amp;
+        t.rotation.x = p.rx + Math.sin(p.t * 11 + 1) * amp * 0.6;
+        if (p.shake === 0) { t.rotation.z = p.rz; t.rotation.x = p.rx; }
+        busy = true;
+      } else if (p.kind === "lamp" && (p.hold > 0 || p.glow > 0)) {
+        if (p.hold > 0) { p.hold -= dt; p.glow = Math.min(1, p.glow + dt * 4); }
+        else p.glow = Math.max(0, p.glow - dt / 2.5);
+        if (p.glass) { p.glass.emissive.setHex(0xffb640); p.glass.emissiveIntensity = p.glow * 1.4; }
+        p.bulb.intensity = p.glow * 3.5;
+        busy = true;
+      }
+    }
+    for (let i = bits.length - 1; i >= 0; i--) {
+      const g = bits[i]; g.age += dt; busy = true;
+      for (const m of g.items) {
+        const v = m.userData.v; if (g.age < v.delay) continue;
+        m.position.y = Math.max(4, m.position.y - v.vy * dt);
+        m.position.x += Math.sin(now / 500 + v.ph) * 25 * dt;
+        if (m.position.y > 4) { m.rotation.x += v.spin * dt; m.rotation.z += v.spin * 0.7 * dt; }
+      }
+      const fade = Math.max(0, Math.min(1, (5 - g.age) / 1.2));
+      for (const mat of g.mats) mat.opacity = fade;
+      if (g.age > 5) { disposeBits(g); bits.splice(i, 1); }
+    }
+    if (busy) dirty = true;
+  }
+  function disposeBits(g) { for (const m of g.items) scene.remove(m); g.geo.dispose(); for (const mat of g.mats) mat.dispose(); }
+
   // ---- framing: fit the four shops; portrait turns the road to run more upward ----
   const TARGET = new THREE.Vector3(0, 60, -80);
   const pad = padTop; padTop = () => (typeof pad === "function" ? pad() : pad) || 0;
@@ -371,6 +526,7 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
   function resize() {
     const rc = container.getBoundingClientRect();
     if (!rc.width || !rc.height) return;
+    if (edit?.freeCam) { renderer.setSize(rc.width, rc.height, false); camera.aspect = rc.width / rc.height; camera.updateProjectionMatrix(); dirty = true; return; }
     renderer.setSize(rc.width, rc.height, false);
     const aspect = rc.width / rc.height;
     camera.aspect = aspect;
@@ -386,6 +542,10 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
     const off = new THREE.Vector3(-Math.sin(az) * Math.cos(elev), Math.sin(elev), Math.cos(az) * Math.cos(elev));
     // shrink-to-fit: back off until all four shops project inside the frame
     const pts = TYPES.flatMap((t) => [new THREE.Vector3(SHOP[t].x - SHOP[t].w / 2 - 40, 0, FRONT_Z + 40), new THREE.Vector3(SHOP[t].x - SHOP[t].w / 2 - 40, SHOP[t].h + 60, FRONT_Z - DEPTH - 30), new THREE.Vector3(SHOP[t].x + SHOP[t].w / 2, SHOP[t].h + 280, FRONT_Z - DEPTH / 2)]);
+    if (Math.abs(view.dAz) > 1e-3 || Math.abs(view.dElev) > 1e-3 || view.back) {
+      // turned by hand: keep that view, only refit the projection
+      camera.updateProjectionMatrix(); placeCamera(); return;
+    }
     for (let k = 0; k < 30; k++) {
       camera.position.copy(TARGET).addScaledVector(off, dist);
       camera.lookAt(TARGET); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
@@ -396,6 +556,7 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
       if (ok) break;
       dist *= 1.04;
     }
+    Object.assign(view, { az, elev, dist });
     dirty = true;
   }
   const ro = new ResizeObserver(resize); ro.observe(container);
@@ -420,11 +581,15 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
     stepCat(dt);
     anim.update(dt);
+    stepView(dt);
+    stepProps(dt, now);
     if (!reduced) {
       weather.update(dt);
       for (const g of Object.values(shopGroups)) { const p = g.userData.banner; if (p.pen.visible) p.flagPivot.rotation.y = Math.sin(now / 600 + g.position.x) * 0.35; }
     }
+    edit?.update();
     for (const g of Object.values(shopGroups)) {
+      if (edit) break; // the lift would fight the editor's own y
       const want = (g.userData.lift || 0) * 14;
       if (Math.abs(g.position.y - want) > 0.1) { g.position.y += (want - g.position.y) * Math.min(1, dt * 10); dirty = true; }
     }
@@ -436,14 +601,28 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
   placeOverlay();
 
   setShops(shops);
+  if (editMode) {
+    editables.push({ id: "cat", label: "猫", obj: catHolder });
+    const { createEditor } = await import("/editor.js");
+    const byObj = new Map(editables.map((e) => [e.obj, e]));
+    edit = createEditor({
+      name: "street", scene, camera, canvas,
+      pickFrom: () => editables.map((e) => e.obj),
+      identify: (o) => byObj.get(o) || null,
+      viewId: () => ({ kind: "street", aspect: camera.aspect >= 1.2 ? "wide" : camera.aspect >= 0.8 ? "square" : "tall" }),
+      look: () => TARGET,
+      onFreeCam: (on) => { if (!on) resize(); },
+      requestRender: () => { dirty = true; },
+    });
+  }
   const api = {
     setShops,
     reframe: resize,
-    setLang(l) { lang = l; if (hover) fillBubble(hover); },
+    setLang(l) { lang = l; resetBtn.textContent = RESET[l] || RESET.zh; if (hover) fillBubble(hover); },
     pick: (type) => onPick(type),
     /** for tests / scripted checks */
-    _debug: { show, walker, anim, camera, catHolder, step: (dt) => { stepCat(dt); anim.update(dt); renderer.render(scene, camera); placeOverlay(); } },
-    destroy() { alive = false; cancelAnimationFrame(raf); ro.disconnect(); weather.dispose(); renderer.dispose(); container.replaceChildren(); },
+    _debug: { show, walker, view, poke: (kind, i = 0) => poke(propList.filter((o) => o.userData.prop.kind === kind)[i].userData.prop), anim, camera, catHolder, step: (dt) => { stepCat(dt); anim.update(dt); renderer.render(scene, camera); placeOverlay(); } },
+    destroy() { alive = false; cancelAnimationFrame(raf); ro.disconnect(); weather.dispose(); for (const g of bits) disposeBits(g); bits.length = 0; renderer.dispose(); container.replaceChildren(); },
   };
   container.street = api;   // reachable from devtools / scripted checks
   return api;

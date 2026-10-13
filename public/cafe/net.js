@@ -25,7 +25,7 @@ export async function loadWorldShop({ world, type, t }, helper) {
   if (!res.ok) throw new Error(`world ${res.status}`);
   const data = await res.json();
   const s = (data.shops || []).find((x) => x.type === type);
-  return s ? { shop: s.shop, t, role: data.role, guestToken: data.guestToken || null, quota: data.quota || null, note: data.note ?? null, requests: s.requests || [] } : null;
+  return s ? { shop: s.shop, t, role: data.role, guestToken: data.guestToken || null, quota: data.quota || null, note: data.note ?? null, ownerName: data.ownerName || "", requests: s.requests || [] } : null;
 }
 
 /** A random id per tab, kept across reloads of that tab. */
@@ -60,13 +60,14 @@ export async function loadShop(shop) {
  * place(item) resolves "ok" | "taken" | "full" | "error" (network / server trouble).
  * `extra` is sent with every POST (a world shop's `{ t, helper }`); a 429 (daily
  * helper quota) resolves "quota" and a 403 "full", so the drop goes back.
- * World shops also get `requests { requests }` and `note { note }`.
+ * World shops also get `requests { requests }`, `note { note }` and `name { ownerName }`.
+ * `extra` is read at each POST, so changing it (e.g. helperName) takes effect next time.
  * A guest's quota (from a 200 or a 429) is passed to `on.quota({ left, worldsLeft })`.
  */
 export function connect(shop, client, on, extra = {}) {
   const base = `/api/shops/${shop}`;
   const es = new EventSource(`${base}/events?client=${encodeURIComponent(client)}`);
-  for (const name of ["hello", "placed", "hold", "presence", "requests", "note"]) {
+  for (const name of ["hello", "placed", "hold", "presence", "requests", "note", "name"]) {
     es.addEventListener(name, (e) => {
       let data;
       try { data = JSON.parse(e.data); } catch { return; }

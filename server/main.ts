@@ -147,6 +147,40 @@ const server = createServer(async (req, res) => {
       await writeFile(pathJoin(dir, "boxes.json"), JSON.stringify(boxes, null, 2) + "\n");
       return json(res, 200, { ok: true, saved: Object.keys(boxes).length });
     }
+    // dev-only: the ?editor panel exports its tweaks here. Each top-level object
+    // ("items", "views") is merged key by key into what's already saved, newest wins.
+    // and reads them back, so an editor page can start from the last export
+    if ((m = p.match(/^\/api\/editor\/([a-z0-9-]{1,40})$/)) && req.method === "GET") {
+      if (!layoutEditingEnabled) return send(res, 404, "not found");
+      try { return json(res, 200, JSON.parse(await readFile(pathJoin("assets/editor", `${m[1]}.json`), "utf8"))); }
+      catch { return json(res, 404, { error: "none yet" }); }
+    }
+    if ((m = p.match(/^\/api\/editor\/([^/]*)$/)) && req.method === "POST") {
+      if (!layoutEditingEnabled) return send(res, 404, "not found");
+      const name = m[1];
+      if (!/^[a-z0-9-]{1,40}$/.test(name)) return json(res, 400, { error: "bad name" });
+      let raw = "";
+      for await (const chunk of req) {
+        raw += chunk;
+        if (raw.length > 512 * 1024) return json(res, 413, { error: "too large" });
+      }
+      let incoming: unknown;
+      try { incoming = JSON.parse(raw); } catch { return json(res, 400, { error: "bad json" }); }
+      if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) return json(res, 400, { error: "expected an object" });
+      const dir = "assets/editor";
+      const path = pathJoin(dir, `${name}.json`);
+      let existing: Record<string, unknown> = {};
+      try { existing = JSON.parse(await readFile(path, "utf8")); } catch { /* new file */ }
+      const merged: Record<string, unknown> = { ...existing };
+      for (const [k, v] of Object.entries(incoming as Record<string, unknown>)) {
+        const old = existing[k];
+        merged[k] = v && typeof v === "object" && !Array.isArray(v) && old && typeof old === "object" && !Array.isArray(old)
+          ? { ...(old as object), ...(v as object) } : v;
+      }
+      await mkdir(dir, { recursive: true });
+      await writeFile(path, JSON.stringify(merged, null, 2) + "\n");
+      return json(res, 200, { ok: true, path });
+    }
     if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "method not allowed");
     if (p === "/readme" || p === "/readme/") return readme(res);
     if (p.startsWith("/readme/docs/")) return file(res, "docs", p.slice("/readme/docs/".length));

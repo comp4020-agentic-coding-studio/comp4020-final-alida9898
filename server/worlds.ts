@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { createWorld, getWorld, NOTE_MAX, quota, setWorldNote, shopRequests, worldNote, worldShops } from "./db.ts";
+import { createWorld, getWorld, NAME_MAX, NOTE_MAX, ownerName, setOwnerName, worldHelpers, quota, setWorldNote, shopRequests, worldNote, worldShops } from "./db.ts";
 import { broadcast } from "./shops.ts";
 import { canberraDay, currentSeason } from "./season.ts";
 
@@ -8,6 +8,12 @@ const CLIENT_RE = /^[\w-]{1,64}$/;
 const devOverrides = process.env.NODE_ENV !== "production";
 // env SEASON pins the season for the whole app (dev/tests)
 export const season = (queryOverride?: string | null) => currentSeason((devOverrides && queryOverride) || process.env.SEASON);
+
+// Town pages listen here (no presence, no shop): only world-wide events like `name`.
+const worldStreams = new Map<string, Set<ServerResponse>>();
+const worldBroadcast = (world: string, event: string, data: unknown) => {
+  for (const r of worldStreams.get(world) ?? []) r.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+};
 
 type Json = (res: ServerResponse, status: number, body: unknown) => void;
 type Body = (req: IncomingMessage) => Promise<Record<string, unknown>>;
@@ -32,13 +38,13 @@ export async function handleWorlds(req: IncomingMessage, res: ServerResponse, p:
     const note = worldNote(w.id);
     const { season: s } = season();
     if (t === w.owner_token) {
-      json(res, 200, { world: w.id, role: "owner", guestToken: w.guest_token, season: s, note, shops });
+      json(res, 200, { world: w.id, role: "owner", guestToken: w.guest_token, ownerName: ownerName(w.id), helpers: worldHelpers(w.id), season: s, note, shops });
     } else if (t === w.guest_token) {
       const helper = url.searchParams.get("helper") ?? "";
       if (!CLIENT_RE.test(helper)) return json(res, 400, { error: "bad_helper" }), true;
       const q = quota(helper, w.id, canberraDay());
       log(`${w.id} guest ${helper} visits [left ${q.left}, worlds left ${q.worldsLeft}]`);
-      json(res, 200, { world: w.id, role: "guest", season: s, note, shops, quota: q });
+      json(res, 200, { world: w.id, role: "guest", ownerName: ownerName(w.id), season: s, note, shops, quota: q });
     } else {
       log(`${w.id} visit with bad token -> 403`);
       json(res, 403, { error: "forbidden" });
@@ -60,6 +66,42 @@ export async function handleWorlds(req: IncomingMessage, res: ServerResponse, p:
     log(`${w.id} note ${note === null ? "cleared" : `set (${[...note].length} chars)`}`);
     for (const x of worldShops(w.id)) broadcast(x.shop, "note", { note });
     json(res, 200, { note });
+    return true;
+  }
+  if ((m = p.match(/^\/api\/worlds\/([\w-]+)\/events$/)) && req.method === "GET") {
+    const w = getWorld(m[1]);
+    if (!w) return json(res, 404, { error: "unknown_world" }), true;
+    res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache, no-transform", connection: "keep-alive", "x-accel-buffering": "no" });
+    let set = worldStreams.get(w.id);
+    if (!set) worldStreams.set(w.id, (set = new Set()));
+    set.add(res);
+    res.write(`event: hello\ndata: ${JSON.stringify({ ownerName: ownerName(w.id) })}\n\n`);
+    const ping = setInterval(() => res.write(": ping\n\n"), 20_000);
+    req.on("close", () => {
+      clearInterval(ping);
+      set.delete(res);
+      if (!set.size) worldStreams.delete(w.id);
+    });
+    return true;
+  }
+  if ((m = p.match(/^\/api\/worlds\/([\w-]+)\/name$/)) && req.method === "PUT") {
+    const w = getWorld(m[1]);
+    if (!w) return json(res, 404, { error: "unknown_world" }), true;
+    const { t, name } = await body(req);
+    if (t !== w.owner_token) {
+      log(`${w.id} name change -> forbidden`);
+      return json(res, 403, { error: "forbidden" }), true;
+    }
+    if (typeof name !== "string") return json(res, 400, { error: "bad_name" }), true;
+    const trimmed = name.trim();
+    // the owner always has a name: it can be changed, never cleared
+    if (trimmed === "") return json(res, 400, { error: "empty" }), true;
+    if ([...trimmed].length > NAME_MAX) return json(res, 400, { error: "too_long" }), true;
+    const ownerName = setOwnerName(w.id, trimmed);
+    log(`${w.id} owner name set (${[...ownerName].length} chars)`);
+    for (const x of worldShops(w.id)) broadcast(x.shop, "name", { ownerName });
+    worldBroadcast(w.id, "name", { ownerName });
+    json(res, 200, { ownerName });
     return true;
   }
   return false;

@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { createShop, getShop, getWorld, ITEM_RE, openShop, placeAsGuest, placeItem, quota, REQUEST_ID_RE, REQUEST_SCOPES, setRequest, shopRequests, shopWorld, type GuestPlaceResult } from "./db.ts";
+import { createShop, getShop, getWorld, helperName, NAME_MAX, setHelperName, ITEM_RE, openShop, placeAsGuest, placeItem, quota, REQUEST_ID_RE, REQUEST_SCOPES, setRequest, shopRequests, shopWorld, type GuestPlaceResult } from "./db.ts";
 import { canberraDay } from "./season.ts";
 
 // In-memory live state per shop: open SSE streams and what each client holds.
@@ -50,7 +50,7 @@ export async function handleShops(req: IncomingMessage, res: ServerResponse, p: 
   }
   if ((m = p.match(/^\/api\/shops\/([\w-]+)\/place$/)) && req.method === "POST") {
     const shop = m[1];
-    const { item, client, t, helper } = await body(req);
+    const { item, client, t, helper, helperName: hn } = await body(req);
     if (typeof client !== "string" || !CLIENT_RE.test(client)) return json(res, 400, { error: "bad_client" }), true;
     if (typeof item !== "string" || !ITEM_RE.test(item)) return json(res, 400, { error: "bad_item" }), true;
     // World shops need the owner or guest token; legacy shops (no world) stay open to anyone with the link.
@@ -67,6 +67,7 @@ export async function handleShops(req: IncomingMessage, res: ServerResponse, p: 
       } else if (t === w.guest_token) {
         const h = helper ?? client;
         if (typeof h !== "string" || !CLIENT_RE.test(h)) return json(res, 400, { error: "bad_helper" }), true;
+        if (hn !== undefined && (typeof hn !== "string" || [...hn.trim()].length > NAME_MAX)) return json(res, 400, { error: "bad_helper_name" }), true;
         guest = { world: sw.world, helper: h };
         who = `guest:${h}`;
         r = placeAsGuest(shop, sw.world, item, h, canberraDay());
@@ -81,7 +82,10 @@ export async function handleShops(req: IncomingMessage, res: ServerResponse, p: 
     if (r.ok) {
       log(`${where} place ${item} by ${who} ok${qs}`);
       room(shop).holds.get(client)?.delete(item);
-      broadcast(shop, "placed", { item, client });
+      // a guest's name rides along so the owner sees who helped; stored per world
+      if (guest && typeof hn === "string") setHelperName(guest.world, guest.helper, hn.trim());
+      const by = guest ? helperName(guest.world, guest.helper) : "";
+      broadcast(shop, "placed", guest ? { item, client, guest: true, helperName: by } : { item, client });
       json(res, 200, q ? { placed: true, quota: q } : { placed: true });
     } else {
       log(`${where} place ${item} by ${who} -> ${r.reason}${qs}`);

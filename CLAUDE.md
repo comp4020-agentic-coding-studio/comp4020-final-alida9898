@@ -3,8 +3,8 @@
 ## 说话 / Language
 - 跟我聊天一律用中文。
   Always reply to me in Chinese.
-- "英文优先"只用在 App 里面：招牌、界面文字中英并列时英文在前。
-  "English first" applies only inside the app (shop banners, UI text order), not to chat.
+- App 有两套完整语言：英文界面全是英文，中文界面全是中文，不混着放。每加一句界面文字，都同时写好中英两版，跟着语言切换（包括复制出去的邀请文字）。
+  The app has two complete languages: English mode is all English, Chinese mode is all Chinese, never mixed. Every new UI string ships in both and follows the toggle (including copied invite text).
 
 ## 工作流程 / Workflow
 ### 先判断是哪种情况 / First decide which case this is
@@ -89,8 +89,8 @@ Four fixed agents, defined in `.claude/agents/`. Add more when finer roles are n
 ## 设计原则 / Design principles
 - 安静、不评判、故意无聊：每件东西只有一个固定位置，不让玩家做决定。
   Calm, judgment-free, boring on purpose: every object has one fixed place; the player makes no decisions.
-- 不做强制教程、不锁操作、不弹窗打断。提示要能跳过，在第一次遇到的时候才说一句。
-  No forced tutorial, no locked input, no interrupting pop-ups. Hints are skippable and appear once, when first needed.
+- 不做强制教程、不锁操作、不弹窗打断。提示要能跳过，在第一次遇到的时候才说一句。唯一例外：朋友每次进别人的小镇时选一次身份（名字或匿名）；主人第一次进自己的小镇要起名字，之后不再问。
+  No forced tutorial, no locked input, no interrupting pop-ups. Hints are skippable and appear once, when first needed. One exception: a friend picks an identity (name or anonymous) each time they enter someone else's town; an owner names their town once on first visit and is never asked again.
 - 一个物件 = 一个人能拿起来搬走的东西，不拆零件（咖啡机是一整件，杯子另算）。
   One item = one thing a person can pick up and carry; never split into parts.
 - 小东西要放大到它所在的那件家具才能放。

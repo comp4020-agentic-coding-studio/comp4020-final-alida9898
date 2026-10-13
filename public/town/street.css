@@ -32,3 +32,12 @@
 .street-bubble .say > span { display: block; text-align: center; }
 .street-bubble .say > span[hidden] { display: none; }
 .street-bubble .say-meta, .street-bubble .say-flag { font-size: 0.78em; color: #7a5a44; margin-top: 2px; }
+/* "Reset view": appears only after the view was turned by hand */
+.street-reset {
+  position: absolute; right: 16px; bottom: 16px; z-index: 6;
+  font: inherit; font-size: 0.85rem; color: #4a2e1f; background: #fbf3e2cc;
+  border: 2px solid #8a5a3b; border-radius: 999px; padding: 0.35em 0.95em; cursor: pointer;
+  box-shadow: 0 3px 0 rgba(138, 90, 59, 0.18);
+}
+.street-reset:hover { background: #fbf3e2; }
+.street-reset[hidden] { display: none; }

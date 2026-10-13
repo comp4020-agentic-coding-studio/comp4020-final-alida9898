@@ -2,6 +2,7 @@
 // `/w/<world>?t=<token>` — the owner token places freely and can invite; a guest
 // token helps with a daily quota. Click a shop to go into it.
 import { createStreet } from "./town/street.js";
+import { createIdentityCard, whoLabel } from "./identity.js";
 import { SEASONS, SEASON_NAME, SEEN_KEY, currentSeason } from "./shops/season.js";
 
 const TEXT = {
@@ -12,7 +13,7 @@ const TEXT = {
     leftToday: (n) => `今天还能帮 ${n} 件`, townsDone: "今天已经帮了 3 个小镇啦，明天再来",
     invite: "邀请朋友来帮忙", inviteNote: "把这个链接发给朋友：他们每天最多能帮你放 8 件东西。",
     copy: "复制链接", copied: "已复制",
-    preview: "预览", placed: (n) => `已放 ${n} 件 / ${n} placed`,
+    preview: "预览", placed: (n) => `已放 ${n} 件`,
     names: { cafe: "咖啡馆", flower: "花店", book: "书店", bakery: "面包房" },
     bad: "这个小镇的链接好像不对，", badHome: "回到首页", missing: "没有找到这个小镇，",
     trouble: "小镇暂时没打开，过一会儿刷新试试。",
@@ -22,6 +23,9 @@ const TEXT = {
     boardSaving: "正在贴……", boardFail: "没贴上，再试一次", boardTooLong: "最多 40 个字",
     presets: ["想请你帮我把甜点柜摆满～", "二楼读书角还空着，来坐坐吧", "院子里的花还没种，帮我一把？", "随便摆，摆哪件都好 ☕", "今天有点忙，谢谢你来帮忙！"],
     flagGuest: "朋友想请你帮这家店", flagOwner: "你请朋友帮这家店",
+    ownerTown: (n) => n ? `${n} 的小镇` : "我的小镇", guestTown: (n) => n ? `你在 ${n} 的小镇帮忙` : "你在朋友的小镇帮忙",
+    renameHint: "点一下改名字",
+    shareText: (n, l) => n ? `${n} 请你来帮忙摆小镇：${l}` : `来帮我摆小镇吧：${l}`,
   },
   en: {
     brand: "A Corner of Town", toggle: "中文", pageTitle: "A Corner of Town · My town",
@@ -30,7 +34,7 @@ const TEXT = {
     leftToday: (n) => `${n} left today`, townsDone: "You've helped 3 towns today — come back tomorrow",
     invite: "Invite a friend to help", inviteNote: "Send this link to a friend: they can place up to 8 things a day for you.",
     copy: "Copy link", copied: "Copied",
-    preview: "Preview", placed: (n) => `${n} placed / 已放 ${n} 件`,
+    preview: "Preview", placed: (n) => `${n} placed`,
     names: { cafe: "Café", flower: "Flower shop", book: "Bookshop", bakery: "Bakery" },
     bad: "This town link doesn't look right — ", badHome: "go home", missing: "This town couldn't be found — ",
     trouble: "The town didn't open just now. Try refreshing in a moment.",
@@ -40,6 +44,9 @@ const TEXT = {
     boardSaving: "Pinning…", boardFail: "Didn't pin — try again", boardTooLong: "40 characters at most",
     presets: ["Could you help fill my pastry case?", "The upstairs reading nook is still empty — come sit", "The yard's flowers aren't planted yet — help me out?", "Place anything you like ☕", "Busy day — thanks for dropping by!"],
     flagGuest: "Your friend asked for help here", flagOwner: "You asked friends to help here",
+    ownerTown: (n) => n ? `${n}'s Town` : "My town", guestTown: (n) => n ? `Helping in ${n}'s town` : "Helping in a friend's town",
+    renameHint: "Tap to rename",
+    shareText: (n, l) => n ? `${n} invites you to help set up their town: ${l}` : `Come help set up my town: ${l}`,
   },
 };
 const LANG_KEY = "lang", HELPER_KEY = "town-helper-v1";
@@ -93,7 +100,7 @@ const street = await createStreet($("street"), {
   // keep the shops clear of the invite / guest card along the top
   padLeft: () => innerWidth / innerHeight >= 1.2 ? Math.max(...["invite-card", "guest-card"].map((id) => { const el = $(id); return el.hidden ? 0 : el.getBoundingClientRect().right; })) : 0,
   padTop: () => innerWidth / innerHeight >= 1.2 ? 0 : Math.max(...["invite-card", "guest-card", "board"].map((id) => { const el = $(id); return el.hidden ? 0 : el.offsetTop + el.offsetHeight; })),
-  onPick: (type) => { if (!failure && world && token) location.href = shopHref(type); },
+  onPick: (type) => { if (idCard?.isOpen()) return; if (!failure && world && token) location.href = shopHref(type); },
 });
 
 // ---- words ------------------------------------------------------------------
@@ -114,7 +121,20 @@ function render() {
   }
   street.setShops(streetShops());
   street.setLang(lang);
-  $("role-line").textContent = data ? (guest ? "" : t.owner) : "";
+  $("role-line").textContent = "";
+  const tn = $("town-name");
+  tn.hidden = !data;
+  if (data) {
+    tn.textContent = guest ? t.guestTown(ownerName) : t.ownerTown(ownerName);
+    tn.classList.toggle("editable", !guest);
+    tn.disabled = guest;
+    tn.title = guest ? "" : t.renameHint;
+    document.title = `${t.brand} · ${t.ownerTown(ownerName)}`;
+  }
+  idCard?.render();
+  const who = $("who");
+  who.hidden = !guest || !idCard?.choice();
+  if (guest && idCard) { const w = whoLabel(lang, idCard.choice()); who.textContent = w.text; who.title = w.title; }
   $("guest-card").hidden = !guest;
   if (guest) {
     const q = data.quota || { left: 0, worldsLeft: 0 };
@@ -141,7 +161,8 @@ $("lang-toggle").addEventListener("click", () => {
 });
 $("invite-copy").addEventListener("click", async (e) => {
   const btn = e.currentTarget;
-  try { await navigator.clipboard.writeText(inviteLink); }
+  const text = T().shareText(ownerName, inviteLink);
+  try { await navigator.clipboard.writeText(text); }
   catch { $("invite-link").select(); try { document.execCommand("copy"); } catch {} }
   btn.textContent = T().copied;
   setTimeout(() => { btn.textContent = T().copy; }, 1400);
@@ -226,5 +247,29 @@ if (data && lastSeen && lastSeen !== season && !shownHere) {
   const close = () => { $("season-card").classList.add("fading"); setTimeout(() => ($("season-card").hidden = true), 800); };
   $("season-card").addEventListener("click", close);
 }
+// ---- identity (identity.js): a friend chooses a name or anonymous on every visit;
+// it stays in this browser and rides along with each placement (play.js reads it).
+// The owner names the town once (asked only while it has no name) and can rename.
+let ownerName = data?.ownerName || "";
+const idCard = data ? createIdentityCard({
+  world, role: guest ? "guest" : "owner", lang: () => lang, ownerName: () => ownerName,
+  save: guest ? null : async ({ name }) => {
+    const res = await fetch(`/api/worlds/${world}/name`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ t: token, name }) });
+    if (!res.ok) throw new Error(String(res.status));
+    ownerName = (await res.json()).ownerName || "";
+  },
+  onChoose: () => render(),
+}) : null;
+$("town-name").addEventListener("click", () => { if (!guest && idCard) idCard.open(); });
+$("who").addEventListener("click", () => idCard?.open());
+// live: a rename shows up on every open page of this town
+if (data) {
+  const es = new EventSource(`/api/worlds/${world}/events`);
+  const onName = (e) => { try { ownerName = JSON.parse(e.data).ownerName || ""; render(); } catch {} };
+  es.addEventListener("hello", onName);
+  es.addEventListener("name", onName);
+}
+
 render();
+if (idCard && (guest || !ownerName)) idCard.open();
 street.reframe();

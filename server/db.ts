@@ -348,3 +348,54 @@ export function setRequest(shop: string, scope: string, id: string, on: boolean)
   }
   return { ok: true, requests: shopRequests(shop) };
 }
+
+// ---- names: the owner's name for the town, and names friends give themselves ----
+// owner_name "" = not named yet. helper_names maps a guest's helper id to the
+// name they typed, per world; shop_items.by already holds the helper id.
+{
+  const cols = new Set((db.prepare("PRAGMA table_info(worlds)").all() as { name: string }[]).map((c) => c.name));
+  if (!cols.has("owner_name")) db.exec("ALTER TABLE worlds ADD COLUMN owner_name TEXT NOT NULL DEFAULT ''");
+}
+db.exec(`
+  CREATE TABLE IF NOT EXISTS helper_names (
+    world TEXT NOT NULL REFERENCES worlds(id),
+    helper TEXT NOT NULL,
+    name TEXT NOT NULL,
+    PRIMARY KEY (world, helper)
+  );
+`);
+
+export const NAME_MAX = 12;
+
+export function ownerName(world: string): string {
+  return (db.prepare("SELECT owner_name FROM worlds WHERE id = ?").get(world) as { owner_name: string } | undefined)?.owner_name ?? "";
+}
+
+export function setOwnerName(world: string, name: string): string {
+  db.prepare("UPDATE worlds SET owner_name = ? WHERE id = ?").run(name, world);
+  return name;
+}
+
+export function setHelperName(world: string, helper: string, name: string) {
+  if (name === "") db.prepare("DELETE FROM helper_names WHERE world = ? AND helper = ?").run(world, helper);
+  else
+    db.prepare(
+      "INSERT INTO helper_names (world, helper, name) VALUES (?, ?, ?) ON CONFLICT (world, helper) DO UPDATE SET name = excluded.name",
+    ).run(world, helper, name);
+}
+
+export function helperName(world: string, helper: string): string {
+  return (db.prepare("SELECT name FROM helper_names WHERE world = ? AND helper = ?").get(world, helper) as { name: string } | undefined)?.name ?? "";
+}
+
+// Named friends who placed things in this world, most recent first (max 10).
+export function worldHelpers(world: string): { name: string; count: number }[] {
+  return db
+    .prepare(
+      `SELECT n.name AS name, count(*) AS count, max(i.placed_at) AS last
+       FROM shop_items i JOIN shops s ON s.id = i.shop JOIN helper_names n ON n.world = s.world AND n.helper = i.by
+       WHERE s.world = ? GROUP BY n.helper ORDER BY last DESC LIMIT 10`,
+    )
+    .all(world)
+    .map((r) => ({ name: (r as { name: string }).name, count: Number((r as { count: number }).count) }));
+}
