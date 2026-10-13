@@ -48,6 +48,7 @@ const TEXT = {
     leftToday: (n) => `今天还能帮 ${n} 件`, enough: "今天帮够啦，明天再来",
     townsDone: "今天已经帮了 3 个小镇啦，明天再来",
     inviteTown: "邀请朋友来帮忙", inviteTownNote: "把这个链接发给朋友：他们每天能帮你放 8 件东西。",
+    askBtn: "请朋友帮忙", askBtnOn: "已请朋友帮忙",
     askHere: "请朋友帮这一块", askOn: "已请朋友帮这一块（再点取消）",
     askedLabel: "朋友想请你帮忙", reqHint: "右键或长按一件，单独请朋友帮忙",
     reqDoneGuest: (x) => `帮朋友摆好了${x}`, reqDoneOwner: (x) => `朋友帮你摆好了${x}`,
@@ -77,6 +78,7 @@ const TEXT = {
     leftToday: (n) => `${n} left today`, enough: "That's enough for today — come back tomorrow",
     townsDone: "You've helped 3 towns today — come back tomorrow",
     inviteTown: "Invite a friend to help", inviteTownNote: "Send this link to a friend: they can place up to 8 things a day for you.",
+    askBtn: "Ask friends", askBtnOn: "Friends asked",
     askHere: "Ask friends to help here", askOn: "Friends asked to help here (tap to undo)",
     askedLabel: "Your friend asked for help", reqHint: "Right-click or long-press a thing to ask for help with just that one",
     reqDoneGuest: (x) => `You finished the ${x} for your friend`, reqDoneOwner: (x) => `A friend finished the ${x}`,
@@ -1030,7 +1032,9 @@ function cellFor(it) {
   }
   return { cell, order: { open: 0, far: 1, locked: 2 }[state] ?? 3, asked };
 }
-const flag = () => { const f = document.createElement("span"); f.className = "req-flag"; f.textContent = "🚩"; f.setAttribute("aria-hidden", "true"); return f; };
+// a little pennant: hollow when nothing is asked, filled once friends are asked
+const flagSvg = (filled) => `<svg class="flag-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 1.5v13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M4 2.5h8.5l-2.2 3 2.2 3H4z" fill="${filled ? "#d0613f" : "none"}" stroke="${filled ? "#d0613f" : "currentColor"}" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
+const flag = () => { const f = document.createElement("span"); f.className = "req-flag"; f.innerHTML = flagSvg(true); return f; };
 function row(label, prog, onClick, disabledNote, asked = false) {
   const b = document.createElement("button");
   b.type = "button"; b.className = "row" + (asked ? " asked" : "");
@@ -1127,7 +1131,7 @@ function renderUI() {
       const [sc, id] = scope ? ["piece", pieceReqId(items.get(scope))] : ["zone", zoneReqId(level, zone)];
       const on = hasReq(sc, id), b = $("ask-btn");
       b.hidden = false;
-      b.textContent = on ? "🚩" : "⚑";
+      b.innerHTML = `${flagSvg(on)}<span>${on ? t.askBtnOn : t.askBtn}</span>`;
       b.classList.toggle("on", on);
       b.setAttribute("aria-pressed", String(on));
       b.title = b.ariaLabel = on ? t.askOn : t.askHere;
