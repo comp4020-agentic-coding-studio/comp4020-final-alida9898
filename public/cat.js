@@ -32,7 +32,7 @@ const SEAT_Y = 44;
 // A little cup on the floor to look at.
 const cup = kit.roundedCylinder(5, 9, 1.5, "terracotta"); cup.position.set(-30, 0, 45); scene.add(cup);
 
-let cat, anim;
+let cat, anim, curPose = "loaf";
 function makeCat(coat) {
   const old = anim;
   if (cat) scene.remove(cat);
@@ -40,6 +40,7 @@ function makeCat(coat) {
   cat.position.y = SEAT_Y;
   scene.add(cat);
   anim = createCatAnimator(cat, { reduced, speed: old?.speed ?? 1, amplitude: old?.amplitude ?? 1, idle: old?.idle ?? true });
+  anim.setPose(curPose); // a coat swap keeps the chosen pose
 }
 makeCat("tabby");
 
@@ -62,6 +63,28 @@ for (const [id, zh, en] of MOTIONS) {
   });
   mBox.append(b);
 }
+
+// poses + lick, and a pause / single-frame step to look at a motion frame by frame
+const pBox = document.getElementById("poses");
+const poseBtns = [];
+for (const [id, zh, en] of [["loaf", "趴着", "Loaf"], ["walk", "走路", "Walk"], ["sit", "坐着", "Sit"]]) {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = `${zh} ${en}`; b.setAttribute("aria-pressed", String(id === "loaf"));
+  b.addEventListener("click", () => { curPose = id; anim.setPose(id); for (const x of poseBtns) x.setAttribute("aria-pressed", String(x === b)); });
+  poseBtns.push(b); pBox.append(b);
+}
+const lickBtn = document.createElement("button");
+lickBtn.type = "button"; lickBtn.textContent = "舔爪 Lick (坐着时 when sitting)";
+lickBtn.addEventListener("click", () => anim.lick());
+pBox.append(lickBtn);
+let paused = false;
+const pauseBtn = document.createElement("button");
+pauseBtn.type = "button"; pauseBtn.textContent = "⏸ 暂停 Pause";
+pauseBtn.addEventListener("click", () => { paused = !paused; pauseBtn.textContent = paused ? "▶ 继续 Play" : "⏸ 暂停 Pause"; });
+const stepBtn = document.createElement("button");
+stepBtn.type = "button"; stepBtn.textContent = "下一帧 Next frame ▸";
+stepBtn.addEventListener("click", () => { if (!paused) pauseBtn.click(); anim.update(1 / 24); });
+pBox.append(pauseBtn, stepBtn);
 
 const cBox = document.getElementById("coats");
 for (const [id, c] of Object.entries(COATS)) {
@@ -93,7 +116,8 @@ addEventListener("resize", resize); resize();
 
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
-  anim.update(clock.getDelta());
+  const dt = clock.getDelta();
+  if (!paused) anim.update(dt);
   controls.update();
   renderer.render(scene, camera);
 });
