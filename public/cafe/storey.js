@@ -14,13 +14,14 @@ const tint = (THREE, hex, k) => new THREE.Color(hex).multiplyScalar(k).getHex();
  * @param o.openings   door/window list from LEVELS[n].openings
  * @param o.stairsUp   build the staircase up to the next storey
  * @param o.top        last storey: finish the wall tops with a cornice
+ * @param o.room       footprint { x, z, wall } (default: the café's ROOM)
  * @returns { group, walls: { back, left, right } }
  */
-export async function buildStorey(kit, { level, theme, openings = [], stairsUp = false, top = false }) {
+export async function buildStorey(kit, { level, theme, openings = [], stairsUp = false, top = false, room = ROOM }) {
   const { THREE } = kit;
   const P = kit.PALETTE;
   const group = new THREE.Group(); group.name = `storey-${level}`;
-  const [x0, x1] = ROOM.x, D = ROOM.z[1], T = ROOM.wall, H = STOREY_H;
+  const [x0, x1] = room.x, D = room.z[1], T = room.wall, H = STOREY_H;
   const W = x1 - x0;
   const wood = tint(THREE, P.brown, 1.12), woodDark = tint(THREE, P.brown, 0.7), rail = P.cream;
   const hole = level > 0 ? STAIRWELL : null;

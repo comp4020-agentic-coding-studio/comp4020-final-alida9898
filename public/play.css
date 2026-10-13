@@ -175,3 +175,11 @@ body.play #house { position: absolute; inset: 0; width: 100%; height: 100%; }
   .presence { font-size: 0.72rem; }
 }
 @media (prefers-reduced-motion: reduce) { .held-dot { animation: none; } }
+
+/* seasonal things: a small "new" tag until placed; the once-a-season card */
+.cell .new-tag {
+  position: absolute; top: 4px; left: 4px; padding: 0 5px; border-radius: 8px;
+  font-size: 0.62rem; line-height: 1.5; background: #f2b8c6; color: #6b3442;
+}
+.season-card { top: 22%; text-align: center; }
+.season-card .hint-title { line-height: 1.5; }

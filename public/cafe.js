@@ -2,12 +2,16 @@
 // Frame + zones: public/cafe/README.md.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import * as kit from "./clay/clay.js";
-import { ROOM, LEVELS, STOREY_H, levelY } from "./cafe/zones.js";
-import { buildStorey } from "./cafe/storey.js";
-import { buildTube } from "./cafe/tube.js";
-import { model, place, topOf } from "./cafe/place.js";
-import { wallAttached } from "./cafe/build.js";
+import { STOREY_H, levelY } from "./cafe/zones.js";
+import { buildShop, wallAttached } from "./cafe/build.js";
+import { loadShopType, typeFromUrl } from "./shops/index.js";
+import { currentSeason } from "./shops/season.js";
+
+// the shop type (?type=, default café) and its season (?season= / server / date)
+const def = await loadShopType(typeFromUrl());
+const season = await currentSeason();
+const { room: ROOM, levels: LEVELS } = def;
+const YARD = def.yard;
 
 const $ = (id) => document.getElementById(id);
 
@@ -82,7 +86,9 @@ controls.maxAzimuthAngle = Math.PI * 0.36;
 
 const N = LEVELS.length, TOP = N * STOREY_H;
 const VIEWS = {
-  overview: { pos: [240, TOP * 0.6 + 120, 1250 + N * 120], target: [0, TOP * 0.46, 230] },
+  overview: YARD
+    ? { pos: [420, TOP * 0.6 + 120, 1350 + N * 120], target: [150, TOP * 0.42, 230] } // building + yard
+    : { pos: [240, TOP * 0.6 + 120, 1250 + N * 120], target: [0, TOP * 0.46, 230] },
 };
 for (const { level } of LEVELS) {
   VIEWS[`level-${level}`] = { pos: [170, levelY(level) + 270, 860], target: [0, levelY(level) + 115, 220] };
@@ -108,28 +114,9 @@ document.querySelector('[data-view="overview"]').setAttribute("aria-pressed", "t
 controls.addEventListener("start", () => { fly = null; });
 
 // ---- build -----------------------------------------------------------------
-const sideWalls = [];
-for (const L of LEVELS) {
-  const top = L.level === N - 1;
-  const { group: storey, walls } = await buildStorey(kit, {
-    level: L.level, theme: L.theme, openings: L.openings, stairsUp: !top, top,
-  });
-  storey.position.y = levelY(L.level);
-  scene.add(storey);
-  for (const [id, zone] of Object.entries(L.zones)) {
-    const group = new THREE.Group(); group.name = `zone-${id}`;
-    storey.add(group); // storey-local: y = 0 is this floor
-    try {
-      const mod = await import(`./cafe/zones/${id}.js`);
-      await mod.populate({ kit, THREE, group, zone, level: L.level, model, place, topOf });
-    } catch (err) {
-      console.error(`zone ${id} failed to populate`, err);
-    }
-  }
-  // things hung on / against a side wall go when the wall goes, or they float
-  sideWalls.push({ walls, on: wallAttached(storey) });
-}
-scene.add(buildTube(kit, { levels: N }));
+const { storeys } = await buildShop(scene, def, season);
+// things hung on / against a side wall go when the wall goes, or they float
+const sideWalls = storeys.map((s) => ({ walls: s.walls, on: wallAttached(s.group, 35, 60, ROOM) }));
 
 // ---- loop ------------------------------------------------------------------
 function resize() {
@@ -152,7 +139,7 @@ function tick(now) {
   }
   // keep the pan target inside the room
   const t = controls.target;
-  t.x = THREE.MathUtils.clamp(t.x, rx0, rx1);
+  t.x = THREE.MathUtils.clamp(t.x, rx0, YARD ? YARD.box.x[1] : rx1);
   t.y = THREE.MathUtils.clamp(t.y, 20, TOP);
   t.z = THREE.MathUtils.clamp(t.z, 0, rz1);
   controls.update();

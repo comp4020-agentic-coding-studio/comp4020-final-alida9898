@@ -1,9 +1,9 @@
-// Builds the café (shell + every zone's populate + bean tube) and its warm lights.
-// Same steps and numbers as cafe.js, packaged so play.js can reuse them without
-// touching the preview page.
+// Builds a shop (shell + every zone's populate + bean tube + optional yard + the
+// season's decor) and its warm lights. The shop TYPE is a definition from
+// public/shops/ (see public/shops/README.md); with no definition it builds the café.
 import * as THREE from "three";
 import * as kit from "../clay/clay.js";
-import { LEVELS, levelY } from "./zones.js";
+import { levelY } from "./zones.js";
 import { buildStorey } from "./storey.js";
 import { buildTube } from "./tube.js";
 import { model, place, topOf } from "./place.js";
@@ -30,16 +30,38 @@ export function addLights(scene) {
   return key;
 }
 
+/** Tag every item under `group` with `season` (seasonal decor files may leave it out). */
+function markSeason(group, season, before) {
+  group.traverse((o) => {
+    if (before.has(o)) return;
+    const t = o.userData && o.userData.item;
+    if (t && !t.season) t.season = season;
+  });
+}
+
+/** Remove tagged items of another season (a zone file may tag them directly). */
+function dropOtherSeasons(group, season) {
+  const out = [];
+  group.traverse((o) => { const s = o.userData?.item?.season; if (s && s !== season) out.push(o); });
+  for (const o of out) o.parent?.remove(o);
+}
+
 /**
- * @returns {{ storeys: { level, group, walls, zones: Record<string, THREE.Group> }[], tube: THREE.Group }}
+ * @param def     shop-type definition (public/shops/<type>/index.js default export)
+ * @param season  "spring" | "summer" | "autumn" | "winter" (null: no seasonal things at all)
+ * @returns {{ storeys: { level, group, walls, zones }[], tube: THREE.Group|null,
+ *   yard: { level: "yard", group, walls: null, zones, scenery }|null }}
  */
-export async function buildCafe(scene) {
-  const N = LEVELS.length;
+export async function buildShop(scene, def, season = null) {
+  if (!def) def = (await import("../shops/cafe/index.js")).default;
+  const { levels, room } = def;
+  const N = levels.length;
   const storeys = [];
-  for (const L of LEVELS) {
+  const ctx = (group, zone, level) => ({ kit, THREE, group, zone, level, model, place, topOf, season });
+  for (const L of levels) {
     const top = L.level === N - 1;
     const { group, walls } = await buildStorey(kit, {
-      level: L.level, theme: L.theme, openings: L.openings, stairsUp: !top, top,
+      level: L.level, theme: L.theme, openings: L.openings, stairsUp: !top && L.stairsUp !== false, top, room,
     });
     group.position.y = levelY(L.level);
     scene.add(group);
@@ -49,17 +71,79 @@ export async function buildCafe(scene) {
       group.add(zg);
       zones[id] = zg;
       try {
-        const mod = await import(`./zones/${id}.js`);
-        await mod.populate({ kit, THREE, group: zg, zone, level: L.level, model, place, topOf });
+        const mod = await def.zone(id);
+        await mod.populate(ctx(zg, zone, L.level));
       } catch (err) {
         console.error(`zone ${id} failed to populate`, err);
       }
     }
     storeys.push({ level: L.level, group, walls, zones });
   }
-  const tube = buildTube(kit, { levels: N });
-  scene.add(tube);
-  return { storeys, tube };
+  const tube = def.tube ? buildTube(kit, { levels: N }) : null;
+  if (tube) scene.add(tube);
+
+  // the yard: ground-level area beside the building, its own zones, plus seasonal scenery
+  let yard = null;
+  if (def.yard) {
+    const Y = def.yard;
+    const group = new THREE.Group(); group.name = "yard";
+    scene.add(group);
+    const zones = {};
+    for (const [id, zone] of Object.entries(Y.zones)) {
+      const zg = new THREE.Group(); zg.name = `zone-${id}`;
+      group.add(zg);
+      zones[id] = zg;
+      try {
+        const mod = await Y.zone(id);
+        await mod.populate(ctx(zg, zone, "yard"));
+      } catch (err) {
+        console.error(`yard zone ${id} failed to populate`, err);
+      }
+    }
+    let scenery = null;
+    try {
+      if (Y.scenery) { scenery = await Y.scenery({ kit, THREE, model, place, season: season || "summer" }); group.add(scenery.group); }
+      else {
+        // no scenery of its own: a plain patch of grass so the yard isn't floating
+        const [x0, x1] = Y.box.x, [z0, z1] = Y.box.z;
+        const grass = kit.roundedBox(x1 - x0 + 12, 6, z1 - z0, 2, 0xa9c07e);
+        grass.position.set((x0 + x1) / 2 + 6, -3, (z0 + z1) / 2); grass.castShadow = false; grass.receiveShadow = true;
+        group.add(grass);
+      }
+    } catch (err) {
+      console.error("yard scenery failed", err);
+    }
+    yard = { level: "yard", group, walls: null, zones, scenery };
+  }
+
+  // the season's decor, added into existing zones
+  const loader = season && def.seasons && def.seasons[season];
+  if (loader) {
+    try {
+      const { decor = [] } = await loader();
+      for (const d of decor) {
+        const area = d.level === "yard" ? yard : storeys.find((s) => s.level === d.level);
+        const zg = area && area.zones[d.zone];
+        if (!zg) { console.warn(`[season] ${season} decor for unknown zone ${d.level}/${d.zone}`); continue; }
+        const before = new Set(); zg.traverse((o) => before.add(o));
+        try {
+          await d.populate(ctx(zg, null, d.level));
+          markSeason(zg, season, before);
+        } catch (err) {
+          console.error(`[season] ${season} decor for ${d.zone} failed`, err);
+        }
+      }
+    } catch (err) {
+      console.error(`[season] ${season} decor failed to load`, err);
+    }
+  }
+  for (const s of [...storeys, ...(yard ? [yard] : [])]) dropOtherSeasons(s.group, season);
+  return { storeys, tube, yard };
+}
+
+/** The café, as before (kept for anything still importing it). */
+export async function buildCafe(scene, season = null) {
+  return buildShop(scene, null, season);
 }
 
 /**
@@ -68,9 +152,9 @@ export async function buildCafe(scene) {
  * along the wall's normal. Hide them together with the wall, or they float.
  * @returns {{ left: THREE.Object3D[], right: THREE.Object3D[], back: THREE.Object3D[] }}
  */
-export function wallAttached(storeyGroup, near = 35, thin = 60) {
+export function wallAttached(storeyGroup, near = 35, thin = 60, room = { x: [-300, 300] }) {
   const out = { left: [], right: [], back: [] };
-  const [x0, x1] = [-300, 300];
+  const [x0, x1] = room.x;
   for (const zg of storeyGroup.children) {
     if (!zg.name.startsWith("zone-")) continue;
     for (const o of zg.children) {

@@ -11,6 +11,23 @@ export function shopFromUrl(loc = location) {
   return q && /^[\w-]+$/.test(q) ? q : null;
 }
 
+/** `{ world, t, type }` from `/w/<world>/<type>?t=<token>`, or null. */
+export function worldFromUrl(loc = location) {
+  const m = loc.pathname.match(/^\/w\/([\w-]+)\/([a-z_]+)\/?$/);
+  if (!m) return null;
+  const t = new URLSearchParams(loc.search).get("t") || "";
+  return { world: m[1], type: m[2], t };
+}
+
+/** The shop id of a world's shop of that type (contract: server/SHOPS.md, worlds). Throws on trouble. */
+export async function loadWorldShop({ world, type, t }, helper) {
+  const res = await fetch(`/api/worlds/${world}?t=${encodeURIComponent(t)}&helper=${encodeURIComponent(helper)}`);
+  if (!res.ok) throw new Error(`world ${res.status}`);
+  const data = await res.json();
+  const s = (data.shops || []).find((x) => x.type === type);
+  return s ? { shop: s.shop, t, role: data.role } : null;
+}
+
 /** A random id per tab, kept across reloads of that tab. */
 export function clientId() {
   const make = () => Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(36).padStart(2, "0")).join("").slice(0, 20);
@@ -41,8 +58,10 @@ export async function loadShop(shop) {
 /**
  * Live link to a shop. `on` = { hello, placed, hold, presence } handlers.
  * place(item) resolves "ok" | "taken" | "full" | "error" (network / server trouble).
+ * `extra` is sent with every POST (a world shop's `{ t, helper }`); a 429 (daily
+ * helper quota) or 403 resolves "full", so the drop goes back quietly.
  */
-export function connect(shop, client, on) {
+export function connect(shop, client, on, extra = {}) {
   const base = `/api/shops/${shop}`;
   const es = new EventSource(`${base}/events?client=${encodeURIComponent(client)}`);
   for (const name of ["hello", "placed", "hold", "presence"]) {
@@ -53,13 +72,14 @@ export function connect(shop, client, on) {
     });
   }
   const post = (path, body) => fetch(`${base}/${path}`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, client }),
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...extra, ...body, client }),
   });
   return {
     async place(item) {
       try {
         const res = await post("place", { item });
         if (res.ok) return "ok";
+        if (res.status === 429 || res.status === 403) return "full";
         if (res.status === 409) {
           const { error } = await res.json().catch(() => ({}));
           return error === "full" ? "full" : "taken";

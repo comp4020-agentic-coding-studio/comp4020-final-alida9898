@@ -5,6 +5,10 @@ each with a floor and three walls, open at the front, no roof. Look only —
 no sticker gameplay here. Numbers below are copied from `zones.js`, which is
 the source of truth; if they ever disagree, `zones.js` wins.
 
+Shop types, the café's yard (院子, right of the building) and seasonal items are
+described in `public/shops/README.md`; the café's definition is `public/shops/cafe/index.js`,
+which points back at this folder's `zones.js` + `zones/*.js`.
+
 ## World frame
 
 - **1 unit = 1 cm**, +Y up.
@@ -102,6 +106,7 @@ cup.userData.item = { id: "l0-bar-cup-1", parent: "l0-bar-counter", layer: 2,
 - `label`: short bilingual name shown in the tray.
 - `focus: true`: furniture worth zooming into (counter, shelves, chalkboard, tables,
   bookshelf). The player clicks it to zoom in; the tray then lists only its descendants.
+- `season` (optional): `"spring" | "summer" | "autumn" | "winter"` — only exists in that season.
 - Untagged objects are scenery (always visible, not placed by the player).
 
 Zoom hierarchy: building → storey → zone (one zone file) → focus item → its children.

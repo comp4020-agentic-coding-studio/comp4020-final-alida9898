@@ -5,10 +5,11 @@
 
 /**
  * @typedef {{ id: string, parent: string|null, layer: number, label: {zh: string, en: string},
- *   focus: boolean, obj: import("three").Object3D, level: number, zone: string,
+ *   focus: boolean, season: string|null, obj: import("three").Object3D, level: number, zone: string,
  *   scope: string|null, children: string[] }} Item
  * `scope` = the nearest focus ancestor's id (null = the zone itself): the zoom
- * level whose tray lists this item.
+ * level whose tray lists this item. `level` is a storey number or "yard".
+ * `season` = the season it belongs to (null = base, always there).
  */
 
 /** @returns {Map<string, Item>} */
@@ -31,6 +32,7 @@ export function collectItems(storeys) {
         if (!Number.isInteger(layer) || layer < 1) { console.warn(`[items] ${id}: missing/invalid layer (${layer})`); layer = 0; }
         items.set(id, {
           id, parent: tag.parent ?? null, layer, label, focus: !!tag.focus, obj,
+          season: typeof tag.season === "string" ? tag.season : null,
           level: s.level, zone, scope: null, children: [],
         });
       });

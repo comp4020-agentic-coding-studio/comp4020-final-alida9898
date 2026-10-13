@@ -4,10 +4,12 @@
 // server (contract: server/SHOPS.md, client side: cafe/net.js).
 // Items contract: public/cafe/README.md. Building + lights: cafe/build.js.
 import * as THREE from "three";
-import { ROOM, LEVELS, STOREY_H, TUBE, levelY } from "./cafe/zones.js";
-import { addLights, buildCafe, wallAttached } from "./cafe/build.js";
+import { STOREY_H, levelY } from "./cafe/zones.js";
+import { addLights, buildShop, wallAttached } from "./cafe/build.js";
 import { collectItems, devTagIfEmpty } from "./cafe/items.js";
-import { LAST_SHOP_KEY, clientId, connect, loadShop, shopFromUrl, shopUrl } from "./cafe/net.js";
+import { LAST_SHOP_KEY, clientId, connect, loadShop, shopFromUrl, shopUrl, worldFromUrl, loadWorldShop } from "./cafe/net.js";
+import { loadShopType, typeFromUrl } from "./shops/index.js";
+import { currentSeason, SEASON_NAME, SEEN_KEY } from "./shops/season.js";
 
 const $ = (id) => document.getElementById(id);
 const debug = new URLSearchParams(location.search).has("debug");
@@ -38,6 +40,9 @@ const TEXT = {
     copy: "复制链接", copied: "已复制", inviteShort: "邀请",
     holding: "有人在拿",
     noShop: "没有找到这家店。", home: "回到小镇",
+    newTag: "新",
+    seasonCard: (s, n) => `${s}到了，店里多了 ${n} 件${s}的小东西`,
+    seasonClose: "点一下就关上",
   },
   en: {
     brand: "A Corner of Town", toggle: "中文", cafe: "Café", back: "‹ Back", loading: "Shaping the café out of clay…",
@@ -57,6 +62,9 @@ const TEXT = {
     copy: "Copy link", copied: "Copied", inviteShort: "Invite",
     holding: "Someone's holding this",
     noShop: "This café couldn't be found.", home: "Back to town",
+    newTag: "new",
+    seasonCard: (s, n) => `${s} is here — ${n} ${s.toLowerCase()} thing${n === 1 ? "" : "s"} to place`,
+    seasonClose: "Tap to close",
   },
 };
 const LANG_KEY = "lang";
@@ -66,15 +74,23 @@ const T = () => TEXT[lang];
 const L = (label) => label[lang] || label.zh || label.en;
 
 // ---- the shop (server) -----------------------------------------------------
-const shop = shopFromUrl();
-if (!shop) { location.replace("/"); await new Promise(() => {}); }
+// `/shop/<id>` (open shop) or `/w/<world>/<type>?t=<token>` (a shop in a world)
+const world = worldFromUrl();
 const me = clientId();
+const worldShop = world ? await loadWorldShop(world, me).catch(() => null) : null;
+const shop = world ? worldShop && worldShop.shop : shopFromUrl();
+if (!shop) { location.replace("/"); await new Promise(() => {}); }
 const placed = new Set();
 const shopLoad = (async () => {
   for (let i = 0; ; i++) {
     try { return await loadShop(shop); } catch { await new Promise((r) => setTimeout(r, Math.min(8000, 800 * 2 ** i))); }
   }
 })();
+// the shop type (a definition in public/shops/) and the season it's in
+const def = await loadShopType(typeFromUrl());
+const season = await currentSeason();
+const { room: ROOM, levels: LEVELS, tube: TUBE } = def;
+const YARD = def.yard || null;
 
 // ---- sound: a soft wooden "tock", synthesised; starts only after a first gesture
 const MUTE_KEY = "cafe-mute-v1";
@@ -125,8 +141,10 @@ scene.background = new THREE.Color(BG);
 addLights(scene);
 const camera = new THREE.PerspectiveCamera(38, 1, 10, 6000);
 
-$("loading").textContent = T().loading;
-const [{ storeys, tube }, data] = await Promise.all([buildCafe(scene), shopLoad]);
+$("loading").textContent = def.loading ? L(def.loading) : T().loading;
+const [{ storeys, tube, yard }, data] = await Promise.all([buildShop(scene, def, season), shopLoad]);
+/** storeys + the yard: everything that holds zones */
+const areas = yard ? [...storeys, yard] : storeys;
 if (!data) {
   const p = document.createElement("p"); p.className = "loading";
   const a = document.createElement("a"); a.href = "/"; a.textContent = T().home;
@@ -142,13 +160,13 @@ const N = LEVELS.length, TOP = N * STOREY_H;
 
 // the tube spans every storey: clip it at the cut instead of hiding it
 const cut = new THREE.Plane(new THREE.Vector3(0, -1, 0), 1e6);
-tube.traverse((o) => {
+tube?.traverse((o) => {
   if (o.isMesh) { o.material = o.material.clone(); o.material.clippingPlanes = [cut]; }
 });
 
 // ---- items -----------------------------------------------------------------
-const devTags = devTagIfEmpty(storeys);
-const items = collectItems(storeys);
+const devTags = devTagIfEmpty(areas);
+const items = collectItems(areas);
 for (const id of [...placed]) if (!items.has(id)) placed.delete(id);
 // a child can't be placed without its parent (older saves, changed zones)
 let pruned = true;
@@ -177,27 +195,37 @@ const view = () => path[path.length - 1];
 const viewLevel = (v = view()) => (v.kind === "building" ? null : v.kind === "item" ? items.get(v.id).level : v.level);
 const viewZone = (v = view()) => (v.kind === "zone" ? v.zone : v.kind === "item" ? items.get(v.id).zone : null);
 
+/** The zones of a storey (number) or of the yard ("yard"). */
+const areaZones = (level) => (level === "yard" ? YARD.zones : LEVELS[level].zones);
+const isYard = (level) => level === "yard";
 function zoneBoxes(level, zone) {
-  const y0 = levelY(level);
-  return LEVELS[level].zones[zone].boxes.map((b) =>
+  const y0 = isYard(level) ? 0 : levelY(level);
+  return areaZones(level)[zone].boxes.map((b) =>
     new THREE.Box3(new THREE.Vector3(b.x[0], y0 + b.y[0], b.z[0]), new THREE.Vector3(b.x[1], y0 + b.y[1], b.z[1])));
 }
-const storeyBox = (level) => new THREE.Box3(
-  new THREE.Vector3(ROOM.x[0], levelY(level), ROOM.z[0]), new THREE.Vector3(ROOM.x[1], levelY(level) + 270, ROOM.z[1]));
+const storeyBox = (level) => isYard(level)
+  ? new THREE.Box3(new THREE.Vector3(YARD.box.x[0], 0, YARD.box.z[0]), new THREE.Vector3(YARD.box.x[1], 230, YARD.box.z[1]))
+  : new THREE.Box3(new THREE.Vector3(ROOM.x[0], levelY(level), ROOM.z[0]), new THREE.Vector3(ROOM.x[1], levelY(level) + 270, ROOM.z[1]));
 function itemBox(id) {
   const b = new THREE.Box3().setFromObject(items.get(id).obj);
-  for (const d of descendants(id)) b.union(new THREE.Box3().setFromObject(d.obj));
+  const indoor = !isYard(items.get(id).level);
+  // indoors, seasonal things never move the camera
+  for (const d of descendants(id)) if (!(indoor && d.season)) b.union(new THREE.Box3().setFromObject(d.obj));
   // never zoom in so far that a small thing fills the screen
   const c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3());
   return new THREE.Box3().setFromCenterAndSize(c, s.max(new THREE.Vector3(110, 70, 90)).multiplyScalar(1.08));
 }
 function viewBox(v) {
-  if (v.kind === "building") return new THREE.Box3(new THREE.Vector3(ROOM.x[0] - 12, 0, 0), new THREE.Vector3(ROOM.x[1] + 12, TOP, ROOM.z[1]));
+  if (v.kind === "building") {
+    const b = new THREE.Box3(new THREE.Vector3(ROOM.x[0] - 12, 0, 0), new THREE.Vector3(ROOM.x[1] + 12, TOP, ROOM.z[1]));
+    return YARD ? b.union(storeyBox("yard")) : b;
+  }
   if (v.kind === "storey") return storeyBox(v.level);
   if (v.kind === "zone") {
     // frame what the zone actually holds (all its items, placed or not), kept inside its boxes
     const zb = zoneBoxes(v.level, v.zone).reduce((a, b) => a.union(b));
-    const list = zoneItems(v.level, v.zone);
+    // indoors, seasonal things never move the camera: frame the base items only
+    const list = zoneItems(v.level, v.zone).filter((it) => isYard(v.level) || !it.season);
     if (!list.length) return zb;
     const b = new THREE.Box3();
     for (const it of list) b.union(new THREE.Box3().setFromObject(it.obj));
@@ -226,7 +254,7 @@ function wallOf(id) {
 }
 const WALL_DIR = { back: new THREE.Vector3(0, 0, 1), right: new THREE.Vector3(-1, 0, 0), left: new THREE.Vector3(1, 0, 0) };
 /** Things on the right half are seen from the left (front-on first), so the view never swings out past the right wall. */
-const fromLeft = (v, c) => v.kind !== "building" && v.kind !== "storey" && c.x > 60;
+const fromLeft = (v, c) => v.kind !== "building" && v.kind !== "storey" && c.x > 60 && c.x < ROOM.x[1];
 /** The angle we'd like before checking what's in the way. */
 function preferredAngle(v, box) {
   let [az, el] = ANGLE[v.kind].map(deg);
@@ -252,14 +280,16 @@ for (const s of storeys) {
     if (o) occluders.push({ obj: o, level: s.level, wall: null });
   }
 }
-occluders.push({ obj: tube, level: -1, wall: null });
+if (tube) occluders.push({ obj: tube, level: -1, wall: null });
 const occRay = new THREE.Raycaster();
 /** Share of sample rays from the target box to camera position `p` that hit the shell (0 = clear view). */
 function blockedShare(p, box, lv, extra = []) {
-  const cutY = lv === null ? Infinity : levelY(lv) + 282;
+  const outside = isYard(lv);
+  const cutY = lv === null || outside ? Infinity : levelY(lv) + 282;
   const objs = occluders.filter((o) => {
-    if (o.level >= 0 && lv !== null && o.level > lv) return false; // storeys above are hidden
-    // a wall is hidden whenever the camera stands outside it (see tick)
+    if (o.level >= 0 && lv !== null && !outside && o.level > lv) return false; // storeys above are hidden
+    // a wall is hidden whenever the camera stands outside it (see tick) — except from the yard
+    if (o.wall && outside) return true;
     if (o.wall === "left") return p.x > ROOM.x[0];
     if (o.wall === "right") return p.x < ROOM.x[1];
     if (o.wall === "back") return p.z > 0;
@@ -272,7 +302,7 @@ function blockedShare(p, box, lv, extra = []) {
   let hit = 0;
   for (const s of samples) {
     // keep samples inside the room, so things hung on a wall don't count the wall they hang on
-    s.x = THREE.MathUtils.clamp(s.x, ROOM.x[0] + 6, ROOM.x[1] - 6); s.z = Math.max(s.z, ROOM.z[0] + 6);
+    if (!outside) { s.x = THREE.MathUtils.clamp(s.x, ROOM.x[0] + 6, ROOM.x[1] - 6); s.z = Math.max(s.z, ROOM.z[0] + 6); }
     const to = p.clone().sub(s), far = to.length();
     occRay.set(s, to.normalize()); occRay.near = 4; occRay.far = far;
     const hits = occRay.intersectObjects(objs, true).filter((h) => h.point.y <= cutY);
@@ -336,7 +366,7 @@ function frame(v, zoomOut = 1, at = path.indexOf(v)) {
     const lv = viewLevel(v);
     // in a zone, every big piece should be in sight, not just the middle of the box
     const extra = v.kind === "zone"
-      ? zoneItems(v.level, v.zone).filter((it) => it.layer === 1).map((it) => new THREE.Box3().setFromObject(it.obj).getCenter(new THREE.Vector3()))
+      ? zoneItems(v.level, v.zone).filter((it) => it.layer === 1 && (isYard(v.level) || !it.season)).map((it) => new THREE.Box3().setFromObject(it.obj).getCenter(new THREE.Vector3()))
       : [];
     // a wall piece is a front elevation: square to its wall, at its own height, nothing to search
     const wall = v.kind === "item" ? wallOf(v.id) : null;
@@ -389,8 +419,11 @@ const goBack = () => { if (path.length > 1) go(path.slice(0, -1)); };
 // dollhouse cutaway: inside a storey, the ones above vanish and the tube is cut at the ceiling
 function applyCut() {
   const lv = viewLevel();
-  for (const s of storeys) s.group.visible = lv === null || s.level <= lv;
-  cut.constant = lv === null ? 1e6 : levelY(lv) + 282;
+  const all = lv === null || isYard(lv);
+  for (const s of storeys) s.group.visible = all || s.level <= lv;
+  // inside a storey the yard steps away, so the room looks exactly as it does without one
+  if (yard) yard.group.visible = all;
+  cut.constant = all ? 1e6 : levelY(lv) + 282;
 }
 
 // ---- picking + hover -------------------------------------------------------
@@ -418,9 +451,9 @@ const shown = (o) => { for (; o; o = o.parent) if (!o.visible) return false; ret
 /** What can be clicked at this zoom level: [{ mesh(es), box, go }] */
 function targets() {
   const v = view();
-  if (v.kind === "building") return storeys.map((s) => ({ objs: [pickMesh(storeyBox(s.level))], box: storeyBox(s.level), go: { kind: "storey", level: s.level } }));
+  if (v.kind === "building") return areas.map((s) => ({ objs: [pickMesh(storeyBox(s.level))], box: storeyBox(s.level), go: { kind: "storey", level: s.level } }));
   if (v.kind === "storey") {
-    return Object.keys(LEVELS[v.level].zones).map((zone) => {
+    return Object.keys(areaZones(v.level)).map((zone) => {
       const boxes = zoneBoxes(v.level, zone);
       return { objs: boxes.map(pickMesh), box: boxes.reduce((a, b) => a.clone().union(b)), go: { kind: "zone", level: v.level, zone } };
     });
@@ -755,6 +788,9 @@ function cellFor(it) {
   img.alt = ""; img.draggable = false; img.dataset.thumb = it.id;
   const name = document.createElement("span"); name.className = "name"; name.textContent = L(it.label);
   cell.append(img, name);
+  if (it.season && state !== "placed") {
+    const tag = document.createElement("span"); tag.className = "new-tag"; tag.textContent = T().newTag; cell.append(tag);
+  }
   if (state === "locked") {
     const note = document.createElement("span"); note.className = "note"; note.textContent = T().unlocks(L(parent.label));
     cell.append(note);
@@ -784,11 +820,12 @@ function row(label, prog, onClick, disabledNote) {
   return b;
 }
 function crumbLabel(v) {
-  if (v.kind === "building") return T().cafe;
-  if (v.kind === "storey") return STOREY_NAME[lang][v.level] || `L${v.level}`;
-  if (v.kind === "zone") return L(LEVELS[v.level].zones[v.zone].label);
+  if (v.kind === "building") return def.name ? L(def.name) : T().cafe;
+  if (v.kind === "storey") return areaName(v.level);
+  if (v.kind === "zone") return L(areaZones(v.level)[v.zone].label);
   return L(items.get(v.id).label);
 }
+const areaName = (level) => (isYard(level) ? L(YARD.label) : STOREY_NAME[lang][level] || `L${level}`);
 const layerPref = new Map();
 function renderUI() {
   const t = T(), v = view();
@@ -823,14 +860,14 @@ function renderUI() {
     $("tray-hint").textContent = t.hintBuilding;
     $("tray-progress").textContent = all.total ? `${all.done} / ${all.total}` : "";
     const rows = document.createElement("div"); rows.className = "rows";
-    for (const s of storeys) rows.append(row(STOREY_NAME[lang][s.level], count(levelItems(s.level)), () => goInto({ kind: "storey", level: s.level })));
+    for (const s of areas) rows.append(row(areaName(s.level), count(levelItems(s.level)), () => goInto({ kind: "storey", level: s.level })));
     body.append(rows);
   } else if (v.kind === "storey") {
     $("tray-hint").textContent = t.hintStorey;
     const lp = count(levelItems(v.level));
     $("tray-progress").textContent = lp.total ? `${lp.done} / ${lp.total}` : "";
     const rows = document.createElement("div"); rows.className = "rows";
-    for (const [zone, z] of Object.entries(LEVELS[v.level].zones)) {
+    for (const [zone, z] of Object.entries(areaZones(v.level))) {
       rows.append(row(L(z.label), count(zoneItems(v.level, zone)), () => goInto({ kind: "zone", level: v.level, zone })));
     }
     body.append(rows);
@@ -1021,7 +1058,7 @@ const net = connect(shop, me, {
     renderUI();
   },
   presence({ present: n }) { present = n; renderPresence(); },
-});
+}, worldShop ? { t: worldShop.t, helper: me } : {});
 
 // soft glowing dots where someone else is reaching, only for what's on screen at this zoom
 const holdDots = new Map();
@@ -1098,7 +1135,7 @@ function resize() {
 }
 const [rx0, rx1] = ROOM.x;
 // what hangs on / sits against each wall hides with it, or it would float in the air
-const onWall = storeys.map((s) => wallAttached(s.group));
+const onWall = storeys.map((s) => wallAttached(s.group, 35, 60, ROOM));
 const itemOf = (o) => [...items.values()].find((it) => it.obj === o);
 for (const on of onWall) for (const w of Object.keys(on)) on[w] = on[w].map((o) => ({ o, it: itemOf(o) }));
 function tick(now) {
@@ -1121,9 +1158,11 @@ function tick(now) {
     if (k >= 1) orbit = null;
   }
   camera.lookAt(look);
+  // looking at the yard, the café stays a closed building seen from outside
+  const outside = isYard(viewLevel());
   for (const s of storeys) {
-    s.walls.left.visible = camera.position.x > rx0;
-    s.walls.right.visible = camera.position.x < rx1;
+    s.walls.left.visible = outside || camera.position.x > rx0;
+    s.walls.right.visible = outside || camera.position.x < rx1;
     // while circling, the back wall hides when the camera is behind it
     s.walls.back.visible = camera.position.z > 0;
     const on = onWall[storeys.indexOf(s)];
@@ -1145,6 +1184,30 @@ applyCut();
 renderUI();
 // read-only handle for poking at the page from devtools, only with ?debug
 if (debug) globalThis.__play = { held, camera, free: () => free, items, placed, spot: (id) => spotOnScreen(items.get(id)), path: () => path, go, frame };
-if (!hintSeen) showHint();
+// ---- a new season: one gentle card the first time this viewer sees it ---------
+const seasonItems = [...items.values()].filter((it) => it.season === season);
+let lastSeen = null;
+try { lastSeen = localStorage.getItem(SEEN_KEY); } catch {}
+function showSeasonCard() {
+  const card = document.createElement("div");
+  card.className = "hint-card season-card"; card.setAttribute("role", "dialog");
+  const fill = () => {
+    const t = T(), name = L(SEASON_NAME[season]);
+    card.replaceChildren();
+    const p = document.createElement("p"); p.className = "hint-title"; p.textContent = t.seasonCard(name, seasonItems.length);
+    const c = document.createElement("p"); c.className = "small hint-close"; c.textContent = t.seasonClose;
+    card.append(p, c);
+  };
+  fill();
+  $("lang-toggle").addEventListener("click", fill);
+  const close = () => { card.classList.add("fading"); setTimeout(() => card.remove(), reduced.matches ? 0 : 800); };
+  card.addEventListener("click", close);
+  canvas.addEventListener("pointerdown", () => { if (card.isConnected) { down = null; close(); } }, { once: true });
+  document.querySelector(".stage").append(card);
+}
+const seasonNews = seasonItems.length > 0 && lastSeen !== season;
+try { localStorage.setItem(SEEN_KEY, season); } catch {}
+if (seasonNews) showSeasonCard();
+else if (!hintSeen) showHint();
 if (devTags) console.info("[play] dev fallback tags are active (no zone tags found)");
 requestAnimationFrame(tick);
