@@ -2,9 +2,9 @@
 // definition shape and how to add a type. Each type owns only its own folder.
 const TYPES = {
   cafe: () => import("./cafe/index.js"),
-  // flower: () => import("./flower/index.js"),
-  // book:   () => import("./book/index.js"),
-  // bakery: () => import("./bakery/index.js"),
+  flower: () => import("./flower/index.js"),
+  book:   () => import("./book/index.js"),
+  bakery: () => import("./bakery/index.js"),
   _template: () => import("./_template/index.js"), // dev only: ?type=_template
 };
 export const DEFAULT_TYPE = "cafe";
