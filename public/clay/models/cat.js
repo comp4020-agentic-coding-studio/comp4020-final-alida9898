@@ -117,6 +117,10 @@ const DUR = { flick: 2.6, ear: 0.9, blink: 0.7, squint: 2.4, stretch: 7, lookUp:
  * → { update(dt), play(name, arg), speed, amplitude, idle }
  * names: "breathe" (no-op, always on) · "flick" · "ear" · "blink" · "squint" · "stretch" ·
  *        "lookUp" (arg: THREE.Vector3 world point) · "jump" (arg: {x,y,z} start offset in cat space)
+ * Poses (continuous, blended over ~0.4 s): api.setPose("loaf" | "walk" | "sit").
+ *   walk — stands up, legs alternate, small body bob, tail up; the caller moves the cat
+ *          (it walks toward its own +X, head first) and sets api.gaitRate (steps/s, default 1.6).
+ *   sit  — haunches down, chest and head up, tail curled; now and then licks a paw.
  */
 export function createCatAnimator(cat, { reduced = false, speed = 1, amplitude = 1, idle = true } = {}) {
   const J = (n) => cat.getObjectByName(n);
@@ -132,8 +136,15 @@ export function createCatAnimator(cat, { reduced = false, speed = 1, amplitude =
   const active = new Map();             // name → { t, dur, arg }
   const rand = Math.random;
   const timers = { flick: 3 + rand() * 4, ear: 6 + rand() * 8, blink: 3 + rand() * 4, stretch: 60 + rand() * 60 };
-  let clock = 0;
-  const api = { speed, amplitude, idle, reduced, update, play };
+  let clock = 0, phase = 0, lick = 0, lickTimer = 4 + rand() * 4;
+  const pose = { walk: 0, sit: 0 }, poseTarget = { walk: 0, sit: 0 };
+  const api = { speed, amplitude, idle, reduced, update, play, setPose, gaitRate: 1.6 };
+
+  function setPose(name) {
+    if (!["loaf", "walk", "sit"].includes(name)) throw new Error(`cat: unknown pose ${name}`);
+    poseTarget.walk = name === "walk" ? 1 : 0;
+    poseTarget.sit = name === "sit" ? 1 : 0;
+  }
 
   function play(name, arg) {
     if (name === "breathe") return;
@@ -177,6 +188,22 @@ export function createCatAnimator(cat, { reduced = false, speed = 1, amplitude =
     j.body.scale.z *= 1 + 0.012 * br;
     j.head.position.y += 0.2 * br;
     j.tail[0].position.y += 0.05 * br;
+
+    // poses: blend toward the target, then lay walk / sit on top of breathing
+    for (const k of ["walk", "sit"]) {
+      const d = poseTarget[k] - pose[k];
+      pose[k] += Math.sign(d) * Math.min(Math.abs(d), dt / 0.4);
+    }
+    if (pose.walk > 0) {
+      phase += dt * api.gaitRate * Math.PI * 2 * pose.walk;
+      walkPose(ease(pose.walk), A);
+    }
+    if (pose.sit > 0) {
+      lickTimer -= dt;
+      if (lickTimer <= 0 && pose.sit >= 1 && !api.reduced) { lick = 0.0001; lickTimer = 6 + rand() * 6; }
+      if (lick > 0) { lick += dt / 2.8; if (lick >= 1) lick = 0; }
+      sitPose(ease(pose.sit), A, lick);
+    }
 
     for (const [name, a] of active) {
       a.t += dt;
@@ -253,6 +280,47 @@ export function createCatAnimator(cat, { reduced = false, speed = 1, amplitude =
       void A;
     },
   };
+
+  function walkPose(w, A) {
+    const s = Math.sin(phase), c = Math.cos(phase);
+    j.body.position.y += (6 + 0.5 * Math.abs(c)) * w;   // stand up, bob twice per stride
+    j.body.rotation.x += 0.03 * s * w * A;
+    j.head.position.y += (6 + 0.4 * Math.abs(c)) * w;
+    j.head.rotation.y -= 0.3 * w;                        // look where it's going
+    j.head.rotation.x += 0.05 * s * w;
+    // legs: stretch the paws into legs, swing front pair in opposition, back follows
+    for (const [leg, ph] of [[j.legFL, 0], [j.legFR, Math.PI], [j.legBack, Math.PI / 2]]) {
+      const sw = Math.sin(phase + ph);
+      leg.position.y += 2.4 * w + Math.max(0, Math.cos(phase + ph)) * 1.4 * w;
+      leg.scale.y *= 1 + 1.4 * w;
+      leg.position.x += 2.6 * sw * w * A;
+    }
+    j.legFR.position.z -= 1 * w;
+    j.legBack.position.z -= 4 * w;
+    j.tail[0].rotation.z += 1.1 * w;                     // tail up, tip curls
+    j.tail[0].rotation.y += 0.6 * w;
+    for (const t of j.tail.slice(1)) t.rotation.y -= 0.32 * w;
+    j.tail[3].rotation.z += 0.2 * w; j.tail[4].rotation.z += 0.35 * w + 0.12 * s * w;
+  }
+
+  function sitPose(w, A, lk) {
+    j.body.rotation.z += 0.32 * w;                       // chest up, rump down
+    j.body.position.x -= 3 * w;
+    j.body.scale.x *= 1 - 0.12 * w;
+    j.head.position.y += 5 * w;
+    j.head.position.x -= 3 * w;
+    j.head.rotation.y -= 0.2 * w;
+    j.legFL.position.x -= 3 * w; j.legFR.position.x -= 3 * w;
+    j.legFL.position.y += 1.2 * w; j.legFR.position.y += 1.2 * w;
+    j.legFL.scale.y *= 1 + 1.2 * w; j.legFR.scale.y *= 1 + 1.2 * w;
+    if (lk > 0) {                                        // lift a paw, dip the head to it
+      const h = hold(lk, 0.25, 0.75), lap = Math.sin(lk * Math.PI * 10) * h;
+      j.legFL.position.y += 5 * h * A; j.legFL.position.x += 1 * h; j.legFL.rotation.z += 0.8 * h;
+      j.head.rotation.x += 0.35 * h + 0.06 * lap; j.head.rotation.y += 0.25 * h;
+      j.mouth.scale.setScalar(0.01 + 0.4 * Math.max(0, lap));
+      lid(0.6 * h);
+    }
+  }
 
   function lid(c) {
     for (const l of [j.lidL, j.lidR]) l.scale.y = Math.max(l.scale.y, 0.08 + 0.92 * clamp01(c));

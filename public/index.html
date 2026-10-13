@@ -5,207 +5,161 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>小镇一角 · A Corner of Town</title>
     <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/town/street.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+      }
+    </script>
     <style>
-      .cafe-entry { margin: 1.4rem 0 0.5rem; }
-      .cafe-buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
-      .cafe-buttons .btn { margin: 0.8rem 0 0.4rem; padding: 0.6em 1.5em; }
-      .btn-soft { color: var(--stitch); background: var(--card); outline-color: var(--stitch); border-color: var(--stitch); }
-      .town-entry { margin: 1.6rem 0 0.4rem; }
       [hidden] { display: none !important; }
-      .btn-big { font-size: 1.15rem; padding: 0.7em 1.8em; margin: 0.4rem 0; display: inline-block; text-decoration: none; }
-      .cafe-entry { opacity: 0.9; }
-      .cafe-buttons .btn { font-size: 0.9rem; }
-      .older { margin-top: 2.5rem; }
-      .town-map.secondary { width: min(100%, 380px); margin-top: 0.4rem; opacity: 0.85; }
+      body.front { margin: 0; height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+      .front .stage { position: relative; flex: 1; min-height: 0; }
+      .front #street { position: absolute; inset: 0; }
+      .front .lang-toggle { left: auto; right: 14px; }
+      .front .copy {
+        position: absolute; z-index: 6; top: 22px; left: 28px; max-width: 24rem; pointer-events: none;
+      }
+      .front .copy > * { pointer-events: auto; }
+      .front .kicker { margin: 0; }
+      .front h1 { margin: 0.1em 0 0.25em; font-size: clamp(2.2rem, 5vw, 3.2rem); }
+      .front .lede { margin: 0 0 0.6rem; line-height: 1.8; font-size: 0.98rem; color: var(--ink); text-shadow: 0 0 10px var(--paper), 0 0 4px var(--paper); }
+      .front .btn { margin: 0.6rem 0 0.4rem; font-size: 1.08rem; padding: 0.6em 1.7em; text-decoration: none; display: inline-block; }
+      .front .hint { margin: 0.2rem 0 0; }
+      .front .foot { position: absolute; z-index: 6; left: 0; right: 0; bottom: 10px; text-align: center; margin: 0; pointer-events: none; }
+      .front .foot a { pointer-events: auto; margin: 0 0.6em; color: var(--ink-soft); }
+      .front .foot button { pointer-events: auto; font: inherit; color: var(--ink-soft); background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; margin: 0 0.6em; }
+      #town-error { color: var(--stitch); }
+      @media (max-width: 700px), (max-aspect-ratio: 4/5) {
+        .front .copy { position: static; max-width: none; padding: 52px 16px 0; text-align: center; }
+        .front .lede { font-size: 0.9rem; line-height: 1.7; }
+        .front .btn { margin-top: 0.3rem; }
+      }
     </style>
   </head>
-  <body class="landing">
+  <body class="front">
     <button id="lang-toggle" class="lang-toggle" type="button" aria-label="Switch language">EN</button>
-    <main>
+    <section class="copy">
       <p class="kicker" id="kicker">A Corner of Town</p>
       <h1 id="h1">小镇一角</h1>
-      <p class="lede" id="lede">
-        你拼一半，一个陌生人拼另一半：一边是店门口和柜台，一边是里屋的座位。<br />
-        一个人也能拼完。两个人都在的时候，中间那扇门会打开。
+      <p class="lede" id="lede"></p>
+      <button id="start-town" class="btn" type="button">开始我的小镇</button>
+      <a id="back-town" class="btn" href="#" hidden>回到我的小镇</a>
+      <p class="small hint" id="hint"></p>
+      <p id="town-error" class="small" role="status" hidden></p>
+    </section>
+    <main class="stage">
+      <div id="street"></div>
+      <p class="small foot">
+        <button id="older" type="button">更早的贴纸版本</button>
+        <a href="/readme/" id="about-link">关于这个作品</a>
       </p>
-      <div class="town-entry">
-        <button id="start-town" class="btn btn-big" type="button">开始我的小镇</button>
-        <p id="back-town" hidden><a class="btn btn-big" href="#">回到我的小镇</a></p>
-        <p class="small" id="town-lede">一条街，四家小店，一件一件摆好。可以请朋友来帮忙。</p>
-        <p id="town-error" class="small" hidden></p>
-      </div>
-      <div class="cafe-entry">
-        <p class="small" id="cafe-lede">和一个人一起，把一家咖啡馆一件一件摆好。同一个链接，同一家店。</p>
-        <div class="cafe-buttons">
-          <button id="open-cafe" class="btn" type="button">开一家店</button>
-          <button id="join-cafe" class="btn btn-soft" type="button">随便进一家</button>
-        </div>
-        <p id="back-cafe" hidden><a href="#">回到我的店 →</a></p>
-        <p id="cafe-error" class="small" hidden></p>
-      </div>
-      <p class="small older" id="older">更早的贴纸版本：</p>
-      <div class="town-map secondary">
-        <img src="/town-map.webp" alt="小镇地图，目前只有咖啡店盖好了" />
-        <button id="plot-coffee" class="hotspot">
-          <span class="label">点它进去拼 →</span>
-        </button>
-      </div>
-      <p class="small town-caption" id="town-caption">小镇目前只有咖啡店装修好了，点它进去拼；其余地方还没轮到。</p>
-      <p id="resume" hidden><a href="#">继续拼我的那一半 →</a></p>
-      <p class="small"><a href="/readme/" id="about-link">关于这个作品</a></p>
     </main>
     <script type="module">
+      import { createStreet } from "/town/street.js";
+      import { currentSeason } from "/shops/season.js";
+
       const TEXT = {
         zh: {
-          kicker: "A Corner of Town",
-          h1: "小镇一角",
-          lede: "你拼一半，一个陌生人拼另一半：一边是店门口和柜台，一边是里屋的座位。<br />一个人也能拼完。两个人都在的时候，中间那扇门会打开。",
-          mapAlt: "小镇地图，目前只有咖啡店盖好了",
-          hotspot: "点它进去拼 →",
-          caption: "小镇目前只有咖啡店装修好了，点它进去拼；其余地方还没轮到。",
-          resume: "继续拼我的那一半 →",
-          about: "关于这个作品",
-          toggle: "EN",
-          cafeLede: "和一个人一起，把一家咖啡馆一件一件摆好。同一个链接，同一家店。",
-          openCafe: "开一家店", joinCafe: "随便进一家", backCafe: "回到我的店 →",
-          cafeError: "店门暂时没打开，过一会儿再试试。",
-          older: "更早的贴纸版本：",
-          startTown: "开始我的小镇", backTown: "回到我的小镇", townLede: "一条街，四家小店，一件一件摆好。可以请朋友来帮忙。",
-          townError: "小镇暂时没打开，过一会儿再试试。",
-          inviteCaption: "有人邀请你一起拼这个场景，点它加入 →",
-          inviteInvalid: "这个邀请链接已经失效了，帮你开一个新的吧。",
-          inviteFull: "这个场景已经有两个人在拼了，帮你开一个新的吧。",
+          kicker: "A Corner of Town", h1: "小镇一角", toggle: "EN",
+          lede: "一条街，四家小店。每件东西都有它的位置，你只要把它放好。季节会变，朋友也可以来帮一把。",
+          start: "开始我的小镇", back: "回到我的小镇",
+          hint: "点一家店，直接进去摆。", hintTouch: "点一家店打个招呼，再点一下就进去。",
+          error: "小镇暂时没打开，过一会儿再试试。",
+          older: "更早的贴纸版本", about: "关于这个作品", preview: "预览",
+          names: { cafe: "咖啡馆", flower: "花店", book: "书店", bakery: "面包房" },
         },
         en: {
-          kicker: "小镇一角",
-          h1: "A Corner of Town",
-          lede: "You build half, a stranger builds the other half: one side is the shop front and counter, the other is the seating inside.<br />You can finish it alone too. When you're both there, the door between you opens.",
-          mapAlt: "Town map — only the coffee shop is built so far",
-          hotspot: "Tap to start building →",
-          caption: "Only the coffee shop is built so far — tap it to start. The rest isn't unlocked yet.",
-          resume: "Resume my half →",
-          about: "About this project",
-          toggle: "中文",
-          cafeLede: "Set up a café together with someone, one thing at a time. Same link, same café.",
-          openCafe: "Open a café", joinCafe: "Join a café", backCafe: "Back to my café →",
-          cafeError: "The door didn't open just now. Try again in a moment.",
-          older: "The earlier sticker version:",
-          startTown: "Start my town", backTown: "Back to my town", townLede: "One street, four little shops, set up one thing at a time. Friends can help.",
-          townError: "The town didn't open just now. Try again in a moment.",
-          inviteCaption: "Someone invited you to build this scene with them — tap to join →",
-          inviteInvalid: "That invite link isn't valid anymore — starting you a fresh one instead.",
-          inviteFull: "Two people are already building this one — starting you a fresh one instead.",
+          kicker: "小镇一角", h1: "A Corner of Town", toggle: "中文",
+          lede: "One street, four little shops. Everything has its place — you just put it there. The seasons change, and friends can drop by to help.",
+          start: "Start my town", back: "Back to my town",
+          hint: "Click a shop to go straight in.", hintTouch: "Tap a shop to say hello, tap again to go in.",
+          error: "The town didn't open just now. Try again in a moment.",
+          older: "The earlier sticker version", about: "About this project", preview: "Preview",
+          names: { cafe: "Café", flower: "Flower shop", book: "Bookshop", bakery: "Bakery" },
         },
       };
-      const invite = new URLSearchParams(location.search).get("invite");
-      const LANG_KEY = "lang";
+      const $ = (id) => document.getElementById(id);
+      const LANG_KEY = "lang", TOWN_KEY = "town-owner-v1";
       let lang = "zh";
-      try { lang = localStorage.getItem(LANG_KEY) || "zh"; } catch {}
-
-      function applyLang() {
-        const t = TEXT[lang];
-        document.documentElement.lang = lang === "zh" ? "zh" : "en";
-        document.getElementById("kicker").textContent = t.kicker;
-        document.getElementById("h1").textContent = t.h1;
-        document.getElementById("lede").innerHTML = t.lede;
-        document.querySelector("#plot-coffee .label").textContent = t.hotspot;
-        document.querySelector(".town-map img").alt = t.mapAlt;
-        document.getElementById("town-caption").textContent = invite ? t.inviteCaption : t.caption;
-        document.querySelector("#resume a").textContent = t.resume;
-        document.getElementById("about-link").textContent = t.about;
-        document.getElementById("lang-toggle").textContent = t.toggle;
-        document.getElementById("cafe-lede").textContent = t.cafeLede;
-        document.getElementById("open-cafe").textContent = t.openCafe;
-        document.getElementById("join-cafe").textContent = t.joinCafe;
-        document.querySelector("#back-cafe a").textContent = t.backCafe;
-        document.getElementById("cafe-error").textContent = t.cafeError;
-        document.getElementById("older").textContent = t.older;
-        document.getElementById("start-town").textContent = t.startTown;
-        document.querySelector("#back-town a").textContent = t.backTown;
-        document.getElementById("town-lede").textContent = t.townLede;
-        document.getElementById("town-error").textContent = t.townError;
-      }
-      applyLang();
-      document.getElementById("lang-toggle").addEventListener("click", () => {
-        lang = lang === "zh" ? "en" : "zh";
-        try { localStorage.setItem(LANG_KEY, lang); } catch {}
-        applyLang();
-      });
+      try { lang = localStorage.getItem(LANG_KEY) === "en" ? "en" : "zh"; } catch {}
+      const touch = matchMedia("(hover: none)").matches;
+      const qSeason = new URLSearchParams(location.search).get("season");
 
       // my town: one world per browser, remembered with its owner token
-      const TOWN_KEY = "town-owner-v1";
       let mine = null;
       try { mine = JSON.parse(localStorage.getItem(TOWN_KEY) || "null"); } catch {}
-      if (mine && /^[\w-]+$/.test(mine.world || "") && mine.owner) {
-        document.getElementById("start-town").hidden = true;
-        const b = document.getElementById("back-town");
-        b.hidden = false;
-        b.querySelector("a").href = `/w/${mine.world}?t=${encodeURIComponent(mine.owner)}`;
-      }
-      document.getElementById("start-town").addEventListener("click", async (e) => {
-        e.currentTarget.disabled = true;
+      if (!(mine && /^[\w-]+$/.test(mine.world || "") && mine.owner)) mine = null;
+      const townHref = (m, type) => `/w/${m.world}${type ? `/${type}` : ""}?t=${encodeURIComponent(m.owner)}${qSeason ? `&season=${qSeason}` : ""}`;
+
+      let busy = false;
+      async function go(type) {
+        if (busy) return;
+        if (mine) { location.href = townHref(mine, type); return; }
+        busy = true; $("start-town").disabled = true; $("town-error").hidden = true;
         try {
           const res = await fetch("/api/worlds", { method: "POST" });
           if (!res.ok) throw new Error(String(res.status));
           const { world, owner } = await res.json();
-          try { localStorage.setItem(TOWN_KEY, JSON.stringify({ world, owner })); } catch {}
-          location.href = `/w/${world}?t=${encodeURIComponent(owner)}`;
+          mine = { world, owner };
+          try { localStorage.setItem(TOWN_KEY, JSON.stringify(mine)); } catch {}
+          location.href = townHref(mine, type);
         } catch {
-          document.getElementById("town-error").hidden = false;
+          $("town-error").hidden = false;
+          $("start-town").disabled = false; busy = false;
+        }
+      }
+      $("start-town").addEventListener("click", () => go());
+      if (mine) { $("start-town").hidden = true; $("back-town").hidden = false; $("back-town").href = townHref(mine); }
+
+      // the earlier sticker game: one half each, two strangers (POST /api/join → /s/<token>)
+      $("older").addEventListener("click", async (e) => {
+        let saved = null;
+        try { saved = localStorage.getItem("my-half"); } catch {}
+        if (saved && /^[\w-]+$/.test(saved)) { location.href = `/s/${saved}`; return; }
+        e.currentTarget.disabled = true;
+        try {
+          const res = await fetch("/api/join", { method: "POST" });
+          if (!res.ok) throw new Error(String(res.status));
+          const { token } = await res.json();
+          try { localStorage.setItem("my-half", token); } catch {}
+          location.href = `/s/${token}`;
+        } catch {
+          $("town-error").hidden = false;
           e.currentTarget.disabled = false;
         }
       });
 
-      // the shared café: a shop id is the whole invitation
-      let lastShop = null;
-      try { lastShop = localStorage.getItem("cafe-last-shop"); } catch {}
-      if (lastShop && /^[\w-]+$/.test(lastShop)) {
-        const b = document.getElementById("back-cafe");
-        b.hidden = false;
-        b.querySelector("a").href = `/shop/${lastShop}`;
+      const shops = () => ["cafe", "flower", "book", "bakery"].map((type) => ({
+        type, label: TEXT[lang].names[type], tag: type === "cafe" ? "" : TEXT[lang].preview,
+      }));
+      function render() {
+        const t = TEXT[lang];
+        document.documentElement.lang = lang;
+        $("kicker").textContent = t.kicker;
+        $("h1").textContent = t.h1;
+        $("lede").textContent = t.lede;
+        $("start-town").textContent = t.start;
+        $("back-town").textContent = t.back;
+        $("hint").textContent = touch ? t.hintTouch : t.hint;
+        $("town-error").textContent = t.error;
+        $("older").textContent = t.older;
+        $("about-link").textContent = t.about;
+        $("lang-toggle").textContent = t.toggle;
+        street?.setShops(shops());
+        street?.setLang(lang);
       }
-      for (const [id, path] of [["open-cafe", "/api/shops"], ["join-cafe", "/api/shops/match"]]) {
-        document.getElementById(id).addEventListener("click", async (e) => {
-          const btns = document.querySelectorAll(".cafe-buttons button");
-          btns.forEach((b) => (b.disabled = true));
-          try {
-            const res = await fetch(path, { method: "POST" });
-            if (!res.ok) throw new Error(String(res.status));
-            const { shop } = await res.json();
-            try { localStorage.setItem("cafe-last-shop", shop); } catch {}
-            location.href = `/shop/${shop}`;
-          } catch {
-            document.getElementById("cafe-error").hidden = false;
-            btns.forEach((b) => (b.disabled = false));
-          }
-        });
-      }
-
-      const KEY = "my-half";
-      let saved = null;
-      try { saved = localStorage.getItem(KEY); } catch {}
-      if (saved) {
-        const r = document.getElementById("resume");
-        r.hidden = false;
-        r.querySelector("a").href = `/s/${saved}`;
-      }
-      document.getElementById("plot-coffee").addEventListener("click", async (e) => {
-        e.currentTarget.disabled = true;
-        const res = invite
-          ? await fetch(`/api/rooms/${invite}/join`, { method: "POST" })
-          : await fetch("/api/join", { method: "POST" });
-        if (!res.ok) {
-          const t = TEXT[lang];
-          alert(res.status === 404 ? t.inviteInvalid : t.inviteFull);
-          const { token } = await (await fetch("/api/join", { method: "POST" })).json();
-          try { localStorage.setItem(KEY, token); } catch {}
-          location.href = `/s/${token}`;
-          return;
-        }
-        const { token } = await res.json();
-        try { localStorage.setItem(KEY, token); } catch {}
-        location.href = `/s/${token}`;
+      let street = null;
+      render();
+      $("lang-toggle").addEventListener("click", () => {
+        lang = lang === "zh" ? "en" : "zh";
+        try { localStorage.setItem(LANG_KEY, lang); } catch {}
+        render();
       });
+      street = await createStreet($("street"), { season: await currentSeason(), lang, shops: shops(), onPick: go });
     </script>
   </body>
 </html>

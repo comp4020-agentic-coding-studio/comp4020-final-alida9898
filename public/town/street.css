@@ -1,0 +1,45 @@
+/* the shared street scene (street.js): canvas, shop labels, speech bubble */
+.street { position: relative; overflow: hidden; }
+.street-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; }
+.street-overlay { position: absolute; inset: 0; pointer-events: none; }
+.street-label {
+  position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer;
+  font: inherit; color: var(--ink); text-align: center; white-space: nowrap;
+  background: var(--card); border: 2px dashed var(--stitch); border-radius: 14px; padding: 3px 11px 4px;
+  box-shadow: 0 4px 14px rgba(74, 46, 31, 0.12); transition: box-shadow 0.15s, background 0.15s;
+}
+.street-label.hot, .street-label:focus-visible { background: var(--paper-2); box-shadow: 0 6px 18px rgba(74, 46, 31, 0.2); }
+.street-label .sname { display: block; font-size: 0.92rem; }
+.street-label .smeta { display: block; font-size: 0.72rem; color: var(--ink-soft); }
+.street-label .stag { font-size: 0.66rem; padding: 0 5px; margin-left: 4px; border-radius: 8px; background: var(--paper-2); color: var(--ink-soft); }
+
+/* comic speech bubble: the anchor sits at the tail tip; the bubble floats above it */
+.street-bubble { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 5; }
+.street-bubble[hidden] { display: none; }
+.street-bubble .say {
+  position: absolute; bottom: 14px; left: 0; transform: translateX(-50%); transform-origin: 50% 100%;
+  white-space: nowrap; font-size: 1rem; color: #4a2e1f; background: #fbf3e2;
+  border: 2.5px solid #8a5a3b; border-radius: 22px; padding: 0.45em 1em 0.5em;
+  box-shadow: 0 5px 0 rgba(138, 90, 59, 0.18), 0 8px 20px rgba(74, 46, 31, 0.16);
+}
+.street-bubble .say::after {          /* the tail */
+  content: ""; position: absolute; left: calc(50% - 9px); bottom: -11px; width: 16px; height: 16px;
+  background: #fbf3e2; border-right: 2.5px solid #8a5a3b; border-bottom: 2.5px solid #8a5a3b;
+  transform: rotate(45deg) skew(8deg, 8deg); border-bottom-right-radius: 5px;
+}
+.street-bubble.pop .say { animation: bubble-pop 0.32s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+.street-bubble.out .say { opacity: 0; transform: translateX(-50%) translateY(4px) scale(0.92); transition: opacity 0.25s, transform 0.25s; }
+@keyframes bubble-pop {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.6); }
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+@media (max-width: 700px) {
+  .street-label { padding: 2px 7px 3px; }
+  .street-label .sname { font-size: 0.78rem; }
+  .street-label .smeta { font-size: 0.64rem; }
+  .street-bubble .say { font-size: 0.88rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .street-bubble.pop .say { animation: none; }
+  .street-bubble.out .say, .street-label { transition: none; }
+}

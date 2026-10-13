@@ -1,21 +1,14 @@
 /* the town page: one street, four plots */
 body.town { --sky: #f6ecdc; }
 .tstage { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--sky); }
-#street { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#street { position: absolute; inset: 0; }
 .role-line { margin-left: auto; color: var(--stitch); }
 [hidden] { display: none !important; }
-.plots { position: absolute; inset: 0; pointer-events: none; }
-.plot {
-  position: absolute; transform: translate(-50%, 0); pointer-events: auto; cursor: pointer;
-  font: inherit; color: var(--ink); text-decoration: none; text-align: center; white-space: nowrap;
-  background: var(--card); border: 2px dashed var(--stitch); border-radius: 14px; padding: 4px 12px 5px;
-  box-shadow: 0 4px 14px rgba(74, 46, 31, 0.12); transition: transform 0.15s;
+.tstatus {
+  position: absolute; z-index: 20; left: 50%; top: 38%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px);
+  text-align: center; margin: 0; background: var(--card); border: 2px dashed var(--stitch); border-radius: 14px; padding: 8px 14px;
 }
-.plot:hover, .plot:focus-visible { transform: translate(-50%, -3px); }
-.plot .pname { display: block; font-size: 0.95rem; }
-.plot .pmeta { display: block; font-size: 0.72rem; color: var(--ink-soft); }
-.plot .ptag { font-size: 0.66rem; padding: 0 5px; margin-left: 4px; border-radius: 8px; background: var(--paper-2); color: var(--ink-soft); }
-.tstatus { position: absolute; left: 0; right: 0; top: 40%; text-align: center; margin: 0; }
+.tstage.failed #street { opacity: 0.45; filter: saturate(0.6); pointer-events: none; }
 .tstatus:empty { display: none; }
 .tcard {
   position: absolute; z-index: 15; left: 16px; width: min(21rem, calc(100% - 32px)); box-sizing: border-box;
@@ -38,8 +31,5 @@ body.town { --sky: #f6ecdc; }
 }
 @media (max-width: 700px) {
   .tcard { left: 12px; width: calc(100% - 24px); }
-  .plot { padding: 3px 7px 4px; }
-  .plot .pname { font-size: 0.8rem; }
-  .plot .pmeta { font-size: 0.64rem; }
 }
-@media (prefers-reduced-motion: reduce) { .plot, .tcard.season { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .tcard.season { transition: none; } }
