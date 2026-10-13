@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { createShop, getShop, ITEM_RE, openShop, placeItem } from "./db.ts";
+import { createShop, getShop, getWorld, ITEM_RE, openShop, placeAsGuest, placeItem, quota, shopWorld, type GuestPlaceResult } from "./db.ts";
+import { canberraDay } from "./season.ts";
 
 // In-memory live state per shop: open SSE streams and what each client holds.
 // Not persisted — a restart just drops presence; EventSource reconnects.
@@ -49,19 +50,43 @@ export async function handleShops(req: IncomingMessage, res: ServerResponse, p: 
   }
   if ((m = p.match(/^\/api\/shops\/([\w-]+)\/place$/)) && req.method === "POST") {
     const shop = m[1];
-    const { item, client } = await body(req);
+    const { item, client, t, helper } = await body(req);
     if (typeof client !== "string" || !CLIENT_RE.test(client)) return json(res, 400, { error: "bad_client" }), true;
     if (typeof item !== "string" || !ITEM_RE.test(item)) return json(res, 400, { error: "bad_item" }), true;
-    const r = placeItem(shop, item, client);
+    // World shops need the owner or guest token; legacy shops (no world) stay open to anyone with the link.
+    const sw = shopWorld(shop);
+    let r: GuestPlaceResult;
+    let who = client;
+    let guest: { world: string; helper: string } | undefined;
+    if (!sw) r = placeItem(shop, item, client);
+    else {
+      const w = getWorld(sw.world)!;
+      if (t === w.owner_token) {
+        who = `owner:${client}`;
+        r = placeItem(shop, item, client);
+      } else if (t === w.guest_token) {
+        const h = helper ?? client;
+        if (typeof h !== "string" || !CLIENT_RE.test(h)) return json(res, 400, { error: "bad_helper" }), true;
+        guest = { world: sw.world, helper: h };
+        who = `guest:${h}`;
+        r = placeAsGuest(shop, sw.world, item, h, canberraDay());
+      } else {
+        log(`${shop} (world ${sw.world}/${sw.type}) place ${item} by ${client} -> forbidden (bad token)`);
+        return json(res, 403, { error: "forbidden" }), true;
+      }
+    }
+    const where = sw ? `${shop} (world ${sw.world}/${sw.type})` : shop;
+    const q = guest && quota(guest.helper, guest.world, canberraDay());
+    const qs = q ? ` [left ${q.left}, worlds left ${q.worldsLeft}]` : "";
     if (r.ok) {
-      log(`${shop} place ${item} by ${client} ok`);
+      log(`${where} place ${item} by ${who} ok${qs}`);
       room(shop).holds.get(client)?.delete(item);
       broadcast(shop, "placed", { item, client });
-      json(res, 200, { placed: true });
+      json(res, 200, q ? { placed: true, quota: q } : { placed: true });
     } else {
-      log(`${shop} place ${item} by ${client} -> ${r.reason}`);
-      const status = { unknown_shop: 404, bad_item: 400, taken: 409, full: 409 }[r.reason];
-      json(res, status, { error: r.reason });
+      log(`${where} place ${item} by ${who} -> ${r.reason}${qs}`);
+      const status = { unknown_shop: 404, bad_item: 400, taken: 409, full: 409, quota_today: 429, too_many_worlds: 429 }[r.reason];
+      json(res, status, q && status === 429 ? { error: r.reason, quota: q } : { error: r.reason });
     }
     return true;
   }

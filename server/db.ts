@@ -174,3 +174,123 @@ export function openShop(candidates: string[]): { shop: string; opened: boolean 
   }
   return { shop: createShop(), opened: true };
 }
+
+// ---- personal worlds: a town per person, with guest helpers and daily quotas ----
+// Additive only: shops gains nullable world/type columns (legacy shops keep NULL
+// and the old open rules); helps is the per-day ledger for guest quotas.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS worlds (
+    id TEXT PRIMARY KEY,
+    owner_token TEXT NOT NULL UNIQUE,
+    guest_token TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+  );
+  CREATE TABLE IF NOT EXISTS helps (
+    helper TEXT NOT NULL,
+    world TEXT NOT NULL REFERENCES worlds(id),
+    day TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (helper, world, day)
+  );
+`);
+{
+  const cols = new Set((db.prepare("PRAGMA table_info(shops)").all() as { name: string }[]).map((c) => c.name));
+  if (!cols.has("world")) db.exec("ALTER TABLE shops ADD COLUMN world TEXT REFERENCES worlds(id)");
+  if (!cols.has("type")) db.exec("ALTER TABLE shops ADD COLUMN type TEXT");
+}
+
+export const SHOP_TYPES = ["cafe", "flower", "book", "bakery"] as const;
+export type ShopType = (typeof SHOP_TYPES)[number];
+export const GUEST_ITEMS_PER_DAY = 8;
+export const GUEST_WORLDS_PER_DAY = 3;
+
+export type WorldRow = { id: string; owner_token: string; guest_token: string };
+
+export function createWorld(): { world: string; owner: string; guest: string; shops: Record<ShopType, string> } {
+  const world = id(9), owner = id(18), guest = id(18);
+  const shops = {} as Record<ShopType, string>;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare("INSERT INTO worlds (id, owner_token, guest_token) VALUES (?, ?, ?)").run(world, owner, guest);
+    for (const type of SHOP_TYPES) {
+      shops[type] = id(9);
+      db.prepare("INSERT INTO shops (id, world, type) VALUES (?, ?, ?)").run(shops[type], world, type);
+    }
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+  return { world, owner, guest, shops };
+}
+
+export function getWorld(world: string): WorldRow | undefined {
+  return db.prepare("SELECT id, owner_token, guest_token FROM worlds WHERE id = ?").get(world) as WorldRow | undefined;
+}
+
+export function worldShops(world: string): { type: string; shop: string; placed: number }[] {
+  const rows = db
+    .prepare(
+      `SELECT s.type, s.id AS shop, (SELECT count(*) FROM shop_items i WHERE i.shop = s.id) AS placed
+       FROM shops s WHERE s.world = ?`,
+    )
+    .all(world) as { type: string; shop: string; placed: number }[];
+  return SHOP_TYPES.flatMap((t) => rows.filter((r) => r.type === t)).map((r) => ({ ...r }));
+}
+
+// Which world (if any) a shop belongs to.
+export function shopWorld(shop: string): { world: string; type: string } | undefined {
+  const r = db.prepare("SELECT world, type FROM shops WHERE id = ? AND world IS NOT NULL").get(shop) as
+    | { world: string; type: string }
+    | undefined;
+  return r;
+}
+
+export function worldShopOfType(world: string, type: string): string | undefined {
+  return (db.prepare("SELECT id FROM shops WHERE world = ? AND type = ?").get(world, type) as { id: string } | undefined)?.id;
+}
+
+export type Quota = { left: number; worldsLeft: number };
+
+// What a helper has left today: items in this world, and new worlds they could still start helping.
+export function quota(helper: string, world: string, day: string): Quota {
+  const rows = db.prepare("SELECT world, count FROM helps WHERE helper = ? AND day = ? AND count > 0").all(helper, day) as {
+    world: string;
+    count: number;
+  }[];
+  const here = rows.find((r) => r.world === world)?.count ?? 0;
+  const others = rows.filter((r) => r.world !== world).length;
+  const helpingHere = here > 0;
+  const worldsUsed = others + (helpingHere ? 1 : 0);
+  // a 4th world can't be started; one already started is still open
+  const canHelpHere = helpingHere || others < GUEST_WORLDS_PER_DAY;
+  return { left: canHelpHere ? GUEST_ITEMS_PER_DAY - here : 0, worldsLeft: Math.max(0, GUEST_WORLDS_PER_DAY - worldsUsed) };
+}
+
+export type GuestPlaceResult = PlaceResult | { ok: false; reason: "quota_today" | "too_many_worlds" };
+
+// Guest placement: quota check, insert and ledger bump in one transaction, so a
+// taken/full item never consumes quota and two tabs can't overspend.
+export function placeAsGuest(shop: string, world: string, item: string, helper: string, day: string): GuestPlaceResult {
+  if (!ITEM_RE.test(item)) return { ok: false, reason: "bad_item" };
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const done = (r: GuestPlaceResult) => (db.exec(r.ok ? "COMMIT" : "ROLLBACK"), r);
+    const { n } = db.prepare("SELECT count(*) AS n FROM shop_items WHERE shop = ?").get(shop) as { n: number };
+    if (db.prepare("SELECT 1 FROM shop_items WHERE shop = ? AND item = ?").get(shop, item)) return done({ ok: false, reason: "taken" });
+    if (n >= SHOP_CAP) return done({ ok: false, reason: "full" });
+    const q = quota(helper, world, day);
+    const helpingHere = !!db.prepare("SELECT 1 FROM helps WHERE helper = ? AND world = ? AND day = ? AND count > 0").get(helper, world, day);
+    if (!helpingHere && q.worldsLeft === 0) return done({ ok: false, reason: "too_many_worlds" });
+    if (q.left <= 0) return done({ ok: false, reason: "quota_today" });
+    db.prepare("INSERT INTO shop_items (shop, item, by, seq) VALUES (?, ?, ?, ?)").run(shop, item, helper, n);
+    db.prepare(
+      `INSERT INTO helps (helper, world, day, count) VALUES (?, ?, ?, 1)
+       ON CONFLICT (helper, world, day) DO UPDATE SET count = count + 1`,
+    ).run(helper, world, day);
+    return done({ ok: true });
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
