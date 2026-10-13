@@ -10,6 +10,7 @@
 // trees ring the outside of bounds; particles fall inside bounds (a bit above it).
 // Sets scene.background (a gradient texture) and scene.fog — the caller should not
 // render with an opaque clear colour over it. prefers-reduced-motion: no particles.
+// `keepOut` ({x, z} footprint, optional): no particles drift there — pass a building so it stays dry indoors.
 // `renderer`/`camera` are accepted for future use and may be omitted.
 import * as kit from "/clay/clay.js";
 
@@ -32,7 +33,7 @@ function skyTexture(top, bottom) {
   return t;
 }
 
-export function createWeather(scene, { season = "spring", bounds = { x: [-500, 500], z: [-500, 500] }, groundY = 0 } = {}) {
+export function createWeather(scene, { season = "spring", bounds = { x: [-500, 500], z: [-500, 500] }, groundY = 0, keepOut = null } = {}) {
   const look = WEATHER[season] || WEATHER.spring;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const r = kit.rng(29);
@@ -86,6 +87,8 @@ export function createWeather(scene, { season = "spring", bounds = { x: [-500, 5
     group.add(bits);
   }
   const rot = new THREE.Euler(), pos = new THREE.Vector3(), scl = new THREE.Vector3();
+  // keepOut: {x:[..], z:[..]} footprint (e.g. a building) where nothing should drift — it's indoors
+  const inside = (x, z) => keepOut && x > keepOut.x[0] && x < keepOut.x[1] && z > keepOut.z[0] && z < keepOut.z[1];
   let t = 0;
   function update(dt = 0) {
     if (!bits) return;
@@ -94,6 +97,7 @@ export function createWeather(scene, { season = "spring", bounds = { x: [-500, 5
       p.y -= b.fall * p.sp * dt;
       if (p.y < groundY) { p.y = groundY + top; p.x = x0 + r() * (x1 - x0); p.z = z0 + r() * (z1 - z0); }
       pos.set(p.x + Math.sin(t * 0.7 + p.ph) * b.sway, p.y, p.z + Math.cos(t * 0.5 + p.ph) * b.sway * 0.5);
+      if (inside(pos.x, pos.z)) pos.y = -1e5; // parked out of sight while over the building
       rot.set(t * p.spin + p.ph, t * p.spin * 0.6, p.ph);
       m4.compose(pos, q.setFromEuler(rot), scl.set(p.s, p.s * (season === "autumn" ? 0.7 : 1), p.s));
       bits.setMatrixAt(i, m4);

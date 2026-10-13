@@ -10,6 +10,7 @@ import { collectItems, devTagIfEmpty } from "./cafe/items.js";
 import { LAST_SHOP_KEY, clientId, connect, loadShop, shopFromUrl, shopUrl, worldFromUrl, loadWorldShop } from "./cafe/net.js";
 import { loadShopType, typeFromUrl } from "./shops/index.js";
 import { currentSeason, SEASON_NAME, SEEN_KEY } from "./shops/season.js";
+import { createWeather } from "./shops/weather.js";
 
 const $ = (id) => document.getElementById(id);
 const debug = new URLSearchParams(location.search).has("debug");
@@ -165,6 +166,13 @@ const camera = new THREE.PerspectiveCamera(38, 1, 10, 6000);
 
 $("loading").textContent = def.loading ? L(def.loading) : T().loading;
 const [{ storeys, tube, yard }, data] = await Promise.all([buildShop(scene, def, season), shopLoad]);
+// the same season sky, grass and drifting petals/leaves/snow as the town street
+const weather = createWeather(scene, {
+  season,
+  bounds: { x: [ROOM.x[0] - 12, YARD ? YARD.box.x[1] : ROOM.x[1] + 12], z: [ROOM.z[0] - 12, Math.max(ROOM.z[1], YARD ? YARD.box.z[1] : 0)] },
+  groundY: 0,
+  keepOut: { x: [ROOM.x[0] - 15, ROOM.x[1] + 15], z: [ROOM.z[0] - 15, ROOM.z[1] + 15] },
+});
 /** storeys + the yard: everything that holds zones */
 const areas = yard ? [...storeys, yard] : storeys;
 if (!data) {
@@ -1436,6 +1444,7 @@ function tick(now) {
   stepMarker(now);
   stepHoldDots(now);
   stepReqGlow(now);
+  weather.update(Math.min(0.1, (now - (tick.last ?? now)) / 1000)); tick.last = now;
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }
