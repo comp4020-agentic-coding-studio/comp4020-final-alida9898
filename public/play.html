@@ -17,18 +17,19 @@
   </head>
   <body class="house play">
     <header class="bar">
-      <button id="lang-toggle" class="lang-toggle bar-toggle" type="button" aria-label="Switch language">EN</button>
-      <a href="/" class="brand" id="brand">小镇一角</a>
-      <button id="back" class="back-btn" type="button" hidden></button>
-      <nav id="crumbs" class="crumbs" aria-label="breadcrumb"></nav>
+      <span class="bar-route">
+        <button id="lang-toggle" class="lang-toggle bar-toggle" type="button" aria-label="Switch language">EN</button>
+        <a href="/" class="brand" id="brand">小镇一角</a>
+        <button id="back" class="back-btn" type="button" hidden><span class="wide"></span><span class="narrow"></span></button>
+        <nav id="crumbs" class="crumbs" aria-label="breadcrumb"></nav>
+      </span>
       <span class="bar-tools">
-        <button id="who" class="who-btn small" type="button" hidden></button>
         <span id="note-chip" class="note-chip small" hidden></span>
-        <span id="quota" class="quota small" aria-live="polite" hidden></span>
-        <span id="presence" class="presence small" aria-live="polite" hidden></span>
-        <button id="invite-small" class="invite-small" type="button" hidden></button>
-        <button id="mute" class="icon-btn" type="button" aria-pressed="false">🔈</button>
-        <button id="help" class="icon-btn" type="button">?</button>
+        <span id="quota" class="quota small" aria-live="polite" hidden><span class="wide"></span><span class="narrow"></span></span>
+        <button id="who" class="tool" type="button" hidden><span class="tool-ico"></span><span class="tool-label"></span></button>
+        <button id="friends" type="button" hidden></button>
+        <button id="mute" class="tool" type="button" aria-pressed="false"><span class="tool-ico">🔈</span><span class="tool-label"></span></button>
+        <button id="help" class="tool" type="button"><span class="tool-ico">?</span><span class="tool-label"></span></button>
       </span>
     </header>
     <main class="stage">
@@ -38,14 +39,6 @@
         <p id="hint-title" class="hint-title"></p>
         <ul id="hint-list" class="hint-list"></ul>
         <p id="hint-close" class="small hint-close"></p>
-      </div>
-      <div id="invite-card" class="invite-card" hidden>
-        <p id="invite-title" class="invite-title"></p>
-        <p id="invite-note" class="small invite-note"></p>
-        <div class="invite-row">
-          <input id="invite-link" class="invite-link" type="text" readonly aria-labelledby="invite-title" />
-          <button id="invite-copy" class="invite-copy" type="button"></button>
-        </div>
       </div>
       <aside id="tray" class="ptray" aria-live="polite">
         <div class="ptray-head">

@@ -3,16 +3,17 @@
 // token helps with a daily quota. Click a shop to go into it.
 import { createStreet } from "./town/street.js";
 import { createIdentityCard, whoLabel } from "./identity.js";
+import { createInvite } from "./invite.js";
 import { SEASONS, SEASON_NAME, SEEN_KEY, currentSeason } from "./shops/season.js";
 
 const TEXT = {
   zh: {
-    brand: "小镇一角", toggle: "EN", pageTitle: "小镇一角 · 我的小镇",
+    brand: "小镇一角", toggle: "EN", toggleAria: "切换到英文", pageTitle: "小镇一角 · 我的小镇",
     loading: "正在把小镇捏出来……",
     owner: "这是你的小镇", guestTitle: "你在帮朋友拼小镇",
     leftToday: (n) => `今天还能帮 ${n} 件`, townsDone: "今天已经帮了 3 个小镇啦，明天再来",
     invite: "邀请朋友来帮忙", inviteNote: "把这个链接发给朋友：他们每天最多能帮你放 8 件东西。",
-    copy: "复制链接", copied: "已复制",
+    copy: "复制链接", copied: "已复制", share: "分享", inviteShort: "邀请",
     preview: "预览", placed: (n) => `已放 ${n} 件`,
     names: { cafe: "咖啡馆", flower: "花店", book: "书店", bakery: "面包房" },
     bad: "这个小镇的链接好像不对，", badHome: "回到首页", missing: "没有找到这个小镇，",
@@ -28,12 +29,12 @@ const TEXT = {
     shareText: (n, l) => n ? `${n} 请你来帮忙摆小镇：${l}` : `来帮我摆小镇吧：${l}`,
   },
   en: {
-    brand: "A Corner of Town", toggle: "中文", pageTitle: "A Corner of Town · My town",
+    brand: "A Corner of Town", toggle: "中文", toggleAria: "Switch to Chinese", pageTitle: "A Corner of Town · My town",
     loading: "Shaping the town out of clay…",
     owner: "This is your town", guestTitle: "You're helping a friend's town",
     leftToday: (n) => `${n} left today`, townsDone: "You've helped 3 towns today — come back tomorrow",
     invite: "Invite a friend to help", inviteNote: "Send this link to a friend: they can place up to 8 things a day for you.",
-    copy: "Copy link", copied: "Copied",
+    copy: "Copy link", copied: "Copied", share: "Share", inviteShort: "Invite",
     preview: "Preview", placed: (n) => `${n} placed`,
     names: { cafe: "Café", flower: "Flower shop", book: "Bookshop", bakery: "Bakery" },
     bad: "This town link doesn't look right — ", badHome: "go home", missing: "This town couldn't be found — ",
@@ -97,21 +98,28 @@ function streetShops() {
 }
 const street = await createStreet($("street"), {
   season, lang, shops: streetShops(),
-  // keep the shops clear of the invite / guest card along the top
-  padLeft: () => innerWidth / innerHeight >= 1.2 ? Math.max(...["invite-card", "guest-card"].map((id) => { const el = $(id); return el.hidden ? 0 : el.getBoundingClientRect().right; })) : 0,
-  padTop: () => innerWidth / innerHeight >= 1.2 ? 0 : Math.max(...["invite-card", "guest-card", "board"].map((id) => { const el = $(id); return el.hidden ? 0 : el.offsetTop + el.offsetHeight; })),
+  // keep the shops clear of the guest card along the top
+  padLeft: () => innerWidth / innerHeight >= 1.2 ? Math.max(...["guest-card"].map((id) => { const el = $(id); return el.hidden ? 0 : el.getBoundingClientRect().right; })) : 0,
+  padTop: () => innerWidth / innerHeight >= 1.2 ? 0 : Math.max(...["guest-card", "board"].map((id) => { const el = $(id); return el.hidden ? 0 : el.offsetTop + el.offsetHeight; })),
   onPick: (type) => { if (idCard?.isOpen()) return; if (!failure && world && token) location.href = shopHref(type); },
 });
 
 // ---- words ------------------------------------------------------------------
 const guest = data?.role === "guest";
 const inviteLink = data?.guestToken ? `${location.origin}/w/${world}?t=${data.guestToken}` : "";
+// the owner's invite lives behind the friends button in the header (invite.js)
+const invite = createInvite($("friends"), {
+  link: inviteLink || null,
+  words: () => { const t = T(); return { label: t.inviteShort, title: t.invite, note: t.inviteNote, copy: t.copy, copied: t.copied, share: t.share }; },
+  shareText: () => T().shareText(ownerName, inviteLink),
+});
 function render() {
   const t = T();
   document.documentElement.lang = lang;
   document.title = t.pageTitle;
   $("brand").textContent = t.brand;
   $("lang-toggle").textContent = t.toggle;
+  $("lang-toggle").ariaLabel = t.toggleAria;
   document.querySelector(".tstage").classList.toggle("failed", !!failure);
   const st = $("status");
   st.replaceChildren();
@@ -121,7 +129,6 @@ function render() {
   }
   street.setShops(streetShops());
   street.setLang(lang);
-  $("role-line").textContent = "";
   const tn = $("town-name");
   tn.hidden = !data;
   if (data) {
@@ -134,20 +141,19 @@ function render() {
   idCard?.render();
   const who = $("who");
   who.hidden = !guest || !idCard?.choice();
-  if (guest && idCard) { const w = whoLabel(lang, idCard.choice()); who.textContent = w.text; who.title = w.title; }
+  if (guest && idCard) {
+    const c = idCard.choice(), w = whoLabel(lang, c);
+    who.querySelector(".tool-ico").textContent = c && !c.anon && c.name ? [...c.name][0] : "🙂";
+    who.querySelector(".tool-label").textContent = w.text;
+    who.title = who.ariaLabel = `${w.text} · ${w.title}`;
+  }
   $("guest-card").hidden = !guest;
   if (guest) {
     const q = data.quota || { left: 0, worldsLeft: 0 };
     $("guest-title").textContent = t.guestTitle;
     $("guest-left").textContent = q.left <= 0 && q.worldsLeft <= 0 ? t.townsDone : t.leftToday(Math.max(0, q.left));
   }
-  $("invite-card").hidden = !inviteLink;
-  if (inviteLink) {
-    $("invite-title").textContent = t.invite;
-    $("invite-note").textContent = t.inviteNote;
-    $("invite-link").value = inviteLink;
-    if ($("invite-copy").textContent !== t.copied) $("invite-copy").textContent = t.copy;
-  }
+  invite.render();
   renderBoard();
   if (!$("season-card").hidden) {
     $("season-title").textContent = t.seasonCard(SEASON_NAME[season][lang]);
@@ -159,15 +165,6 @@ $("lang-toggle").addEventListener("click", () => {
   try { localStorage.setItem(LANG_KEY, lang); } catch {}
   render();
 });
-$("invite-copy").addEventListener("click", async (e) => {
-  const btn = e.currentTarget;
-  const text = T().shareText(ownerName, inviteLink);
-  try { await navigator.clipboard.writeText(text); }
-  catch { $("invite-link").select(); try { document.execCommand("copy"); } catch {} }
-  btn.textContent = T().copied;
-  setTimeout(() => { btn.textContent = T().copy; }, 1400);
-});
-$("invite-link").addEventListener("focus", (e) => e.currentTarget.select());
 
 // ---- the noticeboard: one owner note (≤ 40 code points); guests read it --------
 const MAX_NOTE = 40;
@@ -198,9 +195,9 @@ function renderBoard() {
     countNote();
   }
 }
-/** Phone width: the board stacks under whichever top card is showing. */
+/** Phone width: the board stacks under the guest card when it is showing. */
 function placeBoard() {
-  const top = ["invite-card", "guest-card"].map($).find((el) => !el.hidden);
+  const top = [$("guest-card")].find((el) => !el.hidden);
   $("board").style.top = innerWidth <= 700 && top ? `${top.offsetTop + top.offsetHeight + 10}px` : "";
 }
 addEventListener("resize", placeBoard);

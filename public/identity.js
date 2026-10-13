@@ -41,7 +41,7 @@ function addStyle() {
   const s = document.createElement("style");
   s.textContent = `
 .idcard-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(74, 46, 31, 0.18); display: flex; align-items: flex-start; justify-content: center; padding: 18vh 16px 0; box-sizing: border-box; }
-.idcard-scrim[hidden], .who-btn[hidden] { display: none; }
+.idcard-scrim[hidden] { display: none; }
 .idcard { width: min(20rem, 100%); box-sizing: border-box; background: var(--card); color: var(--ink); border: 2px dashed var(--stitch); border-radius: 18px; padding: 16px 18px 12px; box-shadow: 0 8px 28px rgba(74, 46, 31, 0.22); }
 .idcard-title { margin: 0 0 10px; font-size: 1rem; line-height: 1.4; }
 .idcard-opt { display: flex; align-items: center; gap: 0.5em; margin: 6px 0; cursor: pointer; font-size: 0.92rem; }
@@ -55,7 +55,6 @@ function addStyle() {
 .idcard.owner .idcard-opt { cursor: default; }
 .idcard-go { font: inherit; font-size: 0.9rem; color: var(--card); background: var(--stitch); border: 0; border-radius: 8px; padding: 0.35em 1.1em; cursor: pointer; }
 .idcard-go:disabled { opacity: 0.45; cursor: not-allowed; }
-.who-btn { font: inherit; font-size: 0.85rem; color: var(--ink-soft); background: none; border: 0; border-bottom: 1.5px dashed var(--stitch); padding: 0.1em 0.2em; cursor: pointer; white-space: nowrap; }
 `;
   document.head.append(s);
 }

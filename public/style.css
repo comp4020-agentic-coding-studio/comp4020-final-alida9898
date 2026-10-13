@@ -73,6 +73,73 @@ h1 { font-size: clamp(2.4rem, 8vw, 3.6rem); margin: 0.2em 0 0.4em; letter-spacin
 
 .bar { display: flex; gap: 1rem; align-items: baseline; padding: 12px 16px; flex-wrap: wrap; }
 .brand { font-weight: bold; text-decoration: none; letter-spacing: 0.1em; }
+
+/* the header on the town and shop pages: where you are on the left, round tools on the right */
+.bar:has(.bar-route) { position: relative; align-items: center; flex-wrap: nowrap; gap: 0.7rem; }
+.bar-route { display: flex; align-items: center; gap: 0.7rem; flex: 1 1 auto; min-width: 0; }
+.bar-route .brand { white-space: nowrap; }
+/* the tools keep their size; the route (back button, breadcrumb, town name) is what gives way */
+.bar-tools { display: flex; align-items: center; gap: 0.6rem; flex: 0 0 auto; margin-left: auto; }
+.tool {
+  font: inherit; color: var(--ink-soft); background: none; border: 0; padding: 0; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 0 0 auto; max-width: 6.5em;
+}
+.tool[hidden] { display: none; }
+.tool-ico {
+  position: relative; box-sizing: border-box; width: 2.1rem; height: 2.1rem; border-radius: 50%; display: grid; place-items: center;
+  font-size: 0.9rem; line-height: 1; color: var(--ink); background: var(--card); border: 2px dashed var(--stitch);
+}
+.tool-ico svg { width: 1.25rem; height: 1.25rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tool:hover .tool-ico, .tool[aria-expanded="true"] .tool-ico { background: var(--paper-2); }
+.tool:focus-visible { outline: none; }
+.tool:focus-visible .tool-ico { outline: 3px solid var(--stitch); outline-offset: 2px; }
+.tool-label { font-size: 0.68rem; line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* someone else is here */
+.tool.has-dot .tool-ico::after {
+  content: ""; position: absolute; top: -2px; right: -2px; width: 0.6rem; height: 0.6rem; border-radius: 50%;
+  background: #e6b45c; border: 2px solid var(--paper);
+}
+.wide { display: inline; }
+.narrow { display: none; }
+/* the small card under the friends button */
+.invite-pop {
+  position: absolute; z-index: 25; right: 12px; top: calc(100% + 2px); width: min(19rem, calc(100vw - 24px)); box-sizing: border-box;
+  background: var(--card); border: 2px dashed var(--stitch); border-radius: 16px; padding: 10px 14px 12px;
+  box-shadow: 0 6px 22px rgba(74, 46, 31, 0.16);
+}
+.invite-pop[hidden], .invite-pop [hidden] { display: none; }
+.invite-pop p { margin: 0 0 6px; line-height: 1.4; }
+.invite-here::before { content: ""; display: inline-block; width: 0.5em; height: 0.5em; margin-right: 0.4em; border-radius: 50%; background: #e6b45c; vertical-align: 0.08em; }
+.invite-pop.only-here { width: auto; max-width: calc(100vw - 24px); padding-bottom: 10px; }
+.invite-pop.only-here .invite-here { margin-bottom: 0; }
+.invite-title { font-size: 0.95rem; }
+.invite-row { display: flex; gap: 6px; }
+.invite-link {
+  flex: 1; min-width: 0; font: inherit; font-size: 0.75rem; color: var(--ink-soft); background: var(--paper);
+  border: 1.5px solid rgba(138, 90, 59, 0.3); border-radius: 8px; padding: 0.3em 0.5em;
+}
+.invite-copy {
+  font: inherit; font-size: 0.8rem; color: var(--card); background: var(--stitch); border: 0;
+  border-radius: 8px; padding: 0.3em 0.8em; cursor: pointer; white-space: nowrap;
+}
+.invite-share { color: var(--ink); background: transparent; border: 1.5px solid rgba(138, 90, 59, 0.35); }
+@media (max-width: 700px) {
+  /* phones: icons only */
+  .bar:has(.bar-route) { padding: 8px 12px; gap: 0.5rem; }
+  .bar-route { gap: 0.5rem; }
+  .bar-tools { gap: 0.4rem; }
+  .tool-label { display: none; }
+  .tool-ico { width: 2rem; height: 2rem; }
+  .wide { display: none; }
+  .narrow { display: inline; }
+}
+@media (max-width: 380px) {
+  /* the narrowest phones: a little tighter, so the back button can still say where it goes */
+  .bar:has(.bar-route) { gap: 0.4rem; }
+  .bar-route { gap: 0.4rem; }
+  .bar-tools { gap: 0.3rem; }
+  .tool-ico { width: 1.8rem; height: 1.8rem; }
+}
 #where { color: var(--ink-soft); flex: 1; }
 #progress { font-variant-numeric: tabular-nums; }
 

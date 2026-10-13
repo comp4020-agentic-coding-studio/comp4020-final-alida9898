@@ -95,12 +95,19 @@ export function createWeather(scene, { season = "spring", bounds = { x: [-500, 5
   for (let i = 0; i < N; i++) { trunks.getMatrixAt(i, m4); treeAt.push(new THREE.Vector3().setFromMatrixPosition(m4)); }
   const centre = new THREE.Vector3(cx, groundY, cz), seg = new THREE.Line3(), near = new THREE.Vector3(), hidden = new Array(N).fill(false);
   const zero = new THREE.Matrix4().makeScale(0, 0, 0), keep = [];
-  for (let i = 0; i < N; i++) { const a = new THREE.Matrix4(), b2 = new THREE.Matrix4(); trunks.getMatrixAt(i, a); crowns.getMatrixAt(i, b2); keep.push([a, b2]); }
+  // each tree's world box (trunk + crown), for callers that test what stands in front of their target
+  const treeBoxes = [];
+  const blocked = new Set(); // trees the caller says stand in front of what it is looking at
+  for (let i = 0; i < N; i++) {
+    const a = new THREE.Matrix4(), b2 = new THREE.Matrix4(); trunks.getMatrixAt(i, a); crowns.getMatrixAt(i, b2); keep.push([a, b2]);
+    const box = new THREE.Box3(new THREE.Vector3(-1, -0.5, -1), new THREE.Vector3(1, 0.5, 1)).applyMatrix4(a);
+    treeBoxes.push(box.union(new THREE.Box3(new THREE.Vector3(-1, -1, -1), new THREE.Vector3(1, 1, 1)).applyMatrix4(b2)));
+  }
   function clearView(cam) {
     seg.set(cam, centre); let changed = false;
     for (let i = 0; i < N; i++) {
       const p = treeAt[i], d = seg.closestPointToPoint(p, true, near).setY(p.y).distanceTo(p);
-      const hide = cam.distanceTo(p) < 260 || d < 140;
+      const hide = blocked.has(i) || cam.distanceTo(p) < 260 || d < 140;
       if (hide !== hidden[i]) { hidden[i] = hide; trunks.setMatrixAt(i, hide ? zero : keep[i][0]); crowns.setMatrixAt(i, hide ? zero : keep[i][1]); changed = true; }
     }
     if (changed) { trunks.instanceMatrix.needsUpdate = crowns.instanceMatrix.needsUpdate = true; }
@@ -123,7 +130,9 @@ export function createWeather(scene, { season = "spring", bounds = { x: [-500, 5
   update(0);
 
   return {
-    group, animated: !!bits, update,
+    group, animated: !!bits, update, treeBoxes,
+    /** Hide exactly these trees (indices into treeBoxes) on top of the near-camera rule. */
+    setBlocked(list) { blocked.clear(); for (const i of list) blocked.add(i); },
     dispose() {
       scene.remove(group);
       for (const o of owned) o.dispose();

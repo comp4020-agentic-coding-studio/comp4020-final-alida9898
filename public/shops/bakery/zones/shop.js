@@ -14,7 +14,7 @@ export async function populate({ group, model, place }) {
     return obj;
   };
   await item("bakery-display", { width: 150 }, { x: 55, y: 0, z: 165 },
-    { id: "l0-shop-display", label: L("面包柜", "Bread display"), focus: true });
+    { id: "l0-shop-display", label: L("面包柜", "Bread counter"), focus: true });
   const baskets = [["baguette", "法棍篮", "Baguette basket"], ["round", "圆面包篮", "Round loaf basket"], ["bun", "小餐包篮", "Bun basket"]];
   for (const [i, [kind, zh, en]] of baskets.entries()) {
     await item("bakery-bread-basket", { kind }, { x: 8 + i * 47, y: DISPLAY_TOP, z: 165, turn: (i - 1) * 6 },

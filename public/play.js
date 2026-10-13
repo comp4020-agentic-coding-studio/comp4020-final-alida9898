@@ -11,9 +11,13 @@ import { LAST_SHOP_KEY, clientId, connect, loadShop, shopFromUrl, shopUrl, world
 import { loadShopType, typeFromUrl } from "./shops/index.js";
 import { currentSeason, SEASON_NAME, SEEN_KEY } from "./shops/season.js";
 import { createWeather } from "./shops/weather.js";
+import { createIdentityCard, enteredThisVisit, whoLabel } from "./identity.js";
+import { createInvite } from "./invite.js";
 
 const $ = (id) => document.getElementById(id);
 const debug = new URLSearchParams(location.search).has("debug");
+// ?editor (local dev): hand-tune positions / sizes / views, see editor.js. Never sends place requests.
+const editMode = new URLSearchParams(location.search).has("editor");
 const reduced = matchMedia("(prefers-reduced-motion: reduce)");
 
 // ---- copy ------------------------------------------------------------------
@@ -24,7 +28,7 @@ const LAYER = {
 };
 const TEXT = {
   zh: {
-    brand: "小镇一角", toggle: "EN", cafe: "咖啡馆", back: "‹ 返回", loading: "正在把咖啡馆捏出来……",
+    brand: "小镇一角", toggle: "EN", toggleAria: "切换到英文", crumbsAria: "当前位置", cafe: "咖啡馆", back: "‹ 返回", loading: "正在把咖啡馆捏出来……",
     hintBuilding: "点一层楼，走近一点。", hintStorey: "点一块地方，走近一点。",
     hintZone: "把东西拖到淡淡发光的轮廓上，放手就好。同一层里先放哪个都行。",
     hintEmpty: "这里暂时没有要放的东西。",
@@ -36,9 +40,10 @@ const TEXT = {
     hintTitle: "怎么玩",
     hintItems: ["点击：走近", "Esc 或 返回：后退", "手机上滑：后退", "把东西拖到发光的轮廓上"],
     hintClose: "点一下就关上",
-    present: (n) => `店里现在有 ${n} 个人`,
+    present: (n) => `店里现在有 ${n} 个人`, presentShort: (n) => `${n} 人在`,
     invite: "邀请一个人一起拼", inviteNote: "把这个链接发给一个人，你们拼的是同一家店。",
-    copy: "复制链接", copied: "已复制", inviteShort: "邀请",
+    copy: "复制链接", copied: "已复制", inviteShort: "邀请", share: "分享",
+    soundLabel: "声音", helpLabel: "帮助", leftShort: (n) => `剩 ${n} 件`,
     holding: "有人在拿",
     noShop: "没有找到这家店。", home: "回到小镇",
     newTag: "新",
@@ -47,14 +52,16 @@ const TEXT = {
     town: "我的小镇", friendTown: "朋友的小镇",
     leftToday: (n) => `今天还能帮 ${n} 件`, enough: "今天帮够啦，明天再来",
     townsDone: "今天已经帮了 3 个小镇啦，明天再来",
-    inviteTown: "邀请朋友来帮忙", inviteTownNote: "把这个链接发给朋友：他们每天能帮你放 8 件东西。",
+    inviteTown: "邀请朋友来帮忙", inviteTownNote: "把这个链接发给朋友：他们每天最多能帮你放 8 件东西。",
     askBtn: "请朋友帮忙", askBtnOn: "已请朋友帮忙",
     askHere: "请朋友帮这一块", askOn: "已请朋友帮这一块（再点取消）",
-    askedLabel: "朋友想请你帮忙", reqHint: "右键或长按一件，单独请朋友帮忙",
+    askedLabel: "朋友想请你帮忙", reqHint: "右键点一件，单独请朋友帮忙",
     reqDoneGuest: (x) => `帮朋友摆好了${x}`, reqDoneOwner: (x) => `朋友帮你摆好了${x}`,
+    namedTown: (n) => `${n} 的小镇`, helperPlaced: (n, x) => `${n || "一位匿名朋友"} 帮你放了${x}`,
+    shareText: (n, l) => n ? `${n} 请你来帮忙摆小镇：${l}` : `来帮我摆小镇吧：${l}`,
   },
   en: {
-    brand: "A Corner of Town", toggle: "中文", cafe: "Café", back: "‹ Back", loading: "Shaping the café out of clay…",
+    brand: "A Corner of Town", toggle: "中文", toggleAria: "Switch to Chinese", crumbsAria: "Where you are", cafe: "Café", back: "‹ Back", loading: "Shaping the café out of clay…",
     hintBuilding: "Tap a floor to step closer.", hintStorey: "Tap an area to step closer.",
     hintZone: "Drag each thing onto its faint glowing outline and let go. Within a layer, any order is fine.",
     hintEmpty: "Nothing to place here for now.",
@@ -66,9 +73,10 @@ const TEXT = {
     hintTitle: "How to play",
     hintItems: ["Click: zoom in", "Esc or Back: step back", "Swipe up (phone): back", "Drag things onto the glowing outline"],
     hintClose: "Tap to close",
-    present: (n) => `${n} here now`,
+    present: (n) => `${n} here now`, presentShort: (n) => `${n} here`,
     invite: "Invite someone", inviteNote: "Send this link to someone: you'll both be building the same café.",
-    copy: "Copy link", copied: "Copied", inviteShort: "Invite",
+    copy: "Copy link", copied: "Copied", inviteShort: "Invite", share: "Share",
+    soundLabel: "Sound", helpLabel: "Help", leftShort: (n) => `${n} left`,
     holding: "Someone's holding this",
     noShop: "This café couldn't be found.", home: "Back to town",
     newTag: "new",
@@ -80,8 +88,10 @@ const TEXT = {
     inviteTown: "Invite a friend to help", inviteTownNote: "Send this link to a friend: they can place up to 8 things a day for you.",
     askBtn: "Ask friends", askBtnOn: "Friends asked",
     askHere: "Ask friends to help here", askOn: "Friends asked to help here (tap to undo)",
-    askedLabel: "Your friend asked for help", reqHint: "Right-click or long-press a thing to ask for help with just that one",
+    askedLabel: "Your friend asked for help", reqHint: "Right-click a thing to ask for help with just that one",
     reqDoneGuest: (x) => `You finished the ${x} for your friend`, reqDoneOwner: (x) => `A friend finished the ${x}`,
+    namedTown: (n) => `${n}'s Town`, helperPlaced: (n, x) => `${n || "An anonymous friend"} placed the ${x} for you`,
+    shareText: (n, l) => n ? `${n} invites you to help set up their town: ${l}` : `Come help set up my town: ${l}`,
   },
 };
 const LANG_KEY = "lang";
@@ -101,6 +111,8 @@ const shop = world ? worldShop && worldShop.shop : shopFromUrl();
 if (!shop) { location.replace(world ? `/w/${world.world}?t=${encodeURIComponent(world.t)}` : "/"); await new Promise(() => {}); }
 // a guest helps with a daily quota; the owner places freely
 const guest = !!worldShop && worldShop.role === "guest";
+let idCard = null; // the identity card (set up once the net extras exist)
+let ownerName = worldShop?.ownerName || ""; // the town owner's name ("" = unnamed); live via SSE `name`
 let quota = guest ? worldShop.quota : null;
 const townUrl = world ? `/w/${world.world}?t=${encodeURIComponent(world.t)}` : null;
 let helpedHere = false; // placed here this visit (so a 0 means "enough", not "3 towns")
@@ -185,6 +197,7 @@ if (!data) {
   await new Promise(() => {});
 }
 for (const id of data.placed) placed.add(id);
+let edit = null; // the editor, once loaded (editMode only)
 let present = data.present || 1;
 try { localStorage.setItem(LAST_SHOP_KEY, shop); } catch {}
 $("loading").remove();
@@ -206,6 +219,8 @@ while (pruned) {
   pruned = false;
   for (const id of placed) { const p = items.get(id).parent; if (p && !placed.has(p)) { placed.delete(id); pruned = true; } }
 }
+// editor: everything shows as placed, locally only, so it can be adjusted
+if (editMode) for (const id of items.keys()) placed.add(id);
 for (const it of items.values()) {
   it.base = { y: it.obj.position.y, scale: it.obj.scale.clone() };
   it.obj.visible = placed.has(it.id);
@@ -436,7 +451,7 @@ for (const s of storeys) {
 if (tube) occluders.push({ obj: tube, level: -1, wall: null });
 const occRay = new THREE.Raycaster();
 /** Share of sample rays from the target box to camera position `p` that hit the shell (0 = clear view). */
-function blockedShare(p, box, lv, extra = []) {
+function blockedShare(p, box, lv, extra = [], big = []) {
   const outside = isYard(lv);
   const cutY = lv === null || outside ? Infinity : levelY(lv) + 282;
   const objs = occluders.filter((o) => {
@@ -459,10 +474,112 @@ function blockedShare(p, box, lv, extra = []) {
     const to = p.clone().sub(s), far = to.length();
     occRay.set(s, to.normalize()); occRay.near = 4; occRay.far = far;
     const hits = occRay.intersectObjects(objs, true).filter((h) => h.point.y <= cutY);
-    if (hits.length) hit++;
+    if (hits.length || boxBlocks(s, p, big)) hit++;
   }
   return hit / samples.length;
 }
+// ---- big things that may stand in front of a target: furniture, yard pieces, the yard tree, far trees.
+// Boxes are measured once (every piece has one fixed place); per frame we only project them.
+const bigOcc = [];
+for (const it of items.values()) if (it.layer === 1) bigOcc.push({ it, obj: it.obj, level: it.level, box: new THREE.Box3().setFromObject(it.obj) });
+{
+  const tree = yard?.scenery?.group?.getObjectByName("yard-tree");
+  if (tree) bigOcc.push({ it: null, obj: tree, level: "yard", box: new THREE.Box3().setFromObject(tree) });
+}
+for (const [i, box] of (weather.treeBoxes || []).entries()) bigOcc.push({ tree: i, level: null, box });
+/** Which of bigOcc may count as in the way for view `v` (never the target, its things or what holds it). */
+function occCandidates(v = view()) {
+  if (v.kind === "building") return bigOcc.filter((o) => o.tree !== undefined);
+  const lv = viewLevel(v), zone = viewZone(v);
+  const skip = new Set();
+  if (v.kind === "item") {
+    skip.add(v.id); for (const d of descendants(v.id)) skip.add(d.id);
+    for (let p = items.get(v.id).parent; p; p = items.get(p).parent) skip.add(p);
+  }
+  if (drag?.it) skip.add(drag.it.id);
+  return bigOcc.filter((o) => {
+    if (o.tree !== undefined) return true;
+    if (o.level !== lv) return false;
+    if (!o.it) return v.kind === "item"; // the yard tree is part of the yard's own picture
+    if (skip.has(o.it.id)) return false;
+    if (v.kind === "storey") return false;          // a whole storey / yard is all target
+    if (v.kind === "zone") return o.it.zone !== zone; // a zone's own pieces are its picture
+    return true;
+  });
+}
+const occBoxRay = new THREE.Ray(), occHit = new THREE.Vector3();
+/** Does a big candidate box stand on the segment from sample s to camera p? */
+function boxBlocks(s, p, list) {
+  const to = p.clone().sub(s), far = to.length();
+  occBoxRay.set(s, to.normalize());
+  for (const o of list) {
+    if (o.box.containsPoint(s)) continue;
+    // a little shrink: clay pieces are round, their boxes are not
+    const b = o.shrunk ??= o.box.clone().expandByVector(o.box.getSize(new THREE.Vector3()).multiplyScalar(-0.12));
+    if (occBoxRay.intersectBox(b, occHit) && occHit.distanceTo(s) < far) return true;
+  }
+  return false;
+}
+// fallback: whatever still covers the target from the chosen camera fades away (screen rects from the camera matrix)
+const occFaded = new Map(); // bigOcc entry → true while faded
+const projM = new THREE.Matrix4(), cornerV = new THREE.Vector3();
+function screenRect(box) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, dMin = Infinity, dMax = -Infinity, behind = false;
+  for (let i = 0; i < 8; i++) {
+    cornerV.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
+    cornerV.applyMatrix4(camera.matrixWorldInverse);
+    const d = -cornerV.z;
+    dMin = Math.min(dMin, d); dMax = Math.max(dMax, d);
+    if (d <= camera.near) { behind = true; continue; }
+    cornerV.applyMatrix4(camera.projectionMatrix);
+    x0 = Math.min(x0, cornerV.x); x1 = Math.max(x1, cornerV.x); y0 = Math.min(y0, cornerV.y); y1 = Math.max(y1, cornerV.y);
+  }
+  // a box reaching past the camera plane may cover anything
+  if (behind) { x0 = -1; y0 = -1; x1 = 1; y1 = 1; }
+  return { x0: Math.max(-1, x0), y0: Math.max(-1, y0), x1: Math.min(1, x1), y1: Math.min(1, y1), dMin, dMax };
+}
+function setFaded(o, on) {
+  if (!!occFaded.get(o) === on) return;
+  occFaded.set(o, on);
+  o.obj.traverse((m) => {
+    if (!m.isMesh) return;
+    if (on) {
+      m.userData.occMat = m.material;
+      const f = (mat) => { const c = mat.clone(); c.transparent = true; c.opacity = 0.12; c.depthWrite = false; return c; };
+      m.material = Array.isArray(m.material) ? m.material.map(f) : f(m.material);
+      m.userData.occCast = m.castShadow; m.castShadow = false;
+    } else if (m.userData.occMat) {
+      const c = m.material; m.material = m.userData.occMat; delete m.userData.occMat;
+      for (const x of Array.isArray(c) ? c : [c]) x.dispose();
+      m.castShadow = m.userData.occCast; delete m.userData.occCast;
+    }
+  });
+}
+let occKey = "";
+function stepOcclusion() {
+  camera.updateMatrixWorld();
+  const v = view();
+  const key = camera.matrixWorld.elements.map((x) => x.toFixed(1)).join() + JSON.stringify(v) + (drag?.it?.id || "");
+  if (key === occKey) return;
+  occKey = key;
+  const list = new Set(v.kind === "building" ? [] : occCandidates(v));
+  const t = screenRect(viewBox(v));
+  const tArea = Math.max(1e-4, (t.x1 - t.x0) * (t.y1 - t.y0));
+  const trees = [];
+  for (const o of bigOcc) {
+    let hide = false;
+    if (list.has(o) && !(o.it && !placed.has(o.it.id) && !editMode)) {
+      const r = screenRect(o.box);
+      const w = Math.min(r.x1, t.x1) - Math.max(r.x0, t.x0), h = Math.min(r.y1, t.y1) - Math.max(r.y0, t.y0);
+      const overlap = w > 0 && h > 0 ? (w * h) / tArea : 0;
+      const front = r.dMax < t.dMin || (r.dMin + r.dMax) / 2 < t.dMin;
+      hide = overlap > 0.08 && front;
+    }
+    if (o.tree !== undefined) { if (hide) trees.push(o.tree); } else setFaded(o, hide);
+  }
+  weather.setBlocked?.(trees);
+}
+
 /** Never inside a wall's thickness, behind the back wall, or inside the stairs / tube. */
 const solidBoxes = occluders.filter((o) => !o.wall && o.obj.name !== "floor")
   .map((o) => new THREE.Box3().setFromObject(o.obj).expandByScalar(25));
@@ -529,6 +646,9 @@ function frame(v, zoomOut = 1, at = path.indexOf(v)) {
       best = { score: 0, dir, d: fitDistance(v, box, dir), occ: 0 };
     }
     const flip = fromLeft(v, c) ? -1 : 1;
+    // big pieces / trees in front count as in the way too (only ones actually standing there)
+    const big = v.kind === "building" ? [] : occCandidates(v).filter((o) => o.tree === undefined && (!o.it || placed.has(o.it.id) || editMode));
+    // far trees never steer the camera: they just step aside (stepOcclusion)
     for (const [ei, del] of best ? [] : EL_STEPS.entries()) {
       for (const [ai, daz] of AZ_STEPS.entries()) {
         // a top surface is seen at eye level raised to just above the tabletop: a shallow angle, so its
@@ -538,7 +658,7 @@ function frame(v, zoomOut = 1, at = path.indexOf(v)) {
         const d = Math.min(fitDistance(v, box, dir), parentD);
         const p = c.clone().addScaledVector(dir, d);
         if (v.kind !== "building" && insideShell(p)) continue;
-        const occ = v.kind === "building" ? 0 : blockedShare(p, box, lv, extra);
+        const occ = v.kind === "building" ? 0 : blockedShare(p, box, lv, extra, big);
         // a clear view matters most; then staying near the preferred angle; then a lower camera
         const score = occ * 100 + ai * 1.2 + ei * 4;
         if (!best || score < best.score) best = { score, dir, d, occ };
@@ -650,7 +770,7 @@ canvas.addEventListener("pointerleave", () => hover(null));
 canvas.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; });
 canvas.addEventListener("pointercancel", () => { down = null; });
 canvas.addEventListener("pointerup", (e) => {
-  if (!down || drag) return;
+  if (!down || drag || edit?.consumed || edit?.freeCam) { down = null; return; }
   const dx = e.clientX - down.x, dy = e.clientY - down.y, moved = Math.hypot(dx, dy), dt = performance.now() - down.t;
   down = null;
   // phones: a quick swipe up on the scene steps back (mouse/trackpad never does)
@@ -703,9 +823,14 @@ function reqGesture(cell, it) {
     toggleReq("item", itemReqId(it));
     if (!reqHintSeen) { reqHintSeen = true; try { localStorage.setItem(REQ_HINT_KEY, "1"); } catch {} }
   };
-  cell.addEventListener("contextmenu", (e) => { e.preventDefault(); if (pressFired !== null) return; fire(); });
+  let lastType = "mouse";
+  // Android fires contextmenu on a touch long-press: swallow it, but only a mouse right-click asks
+  cell.addEventListener("contextmenu", (e) => { e.preventDefault(); if (pressFired !== null || lastType === "touch") return; fire(); });
   cell.addEventListener("pointerdown", (e) => {
-    if (e.pointerType === "mouse") return;
+    lastType = e.pointerType;
+    // touch: a press-and-hold is how people start a drag on a phone, so it never asks for help
+    // (the flag button at the top of the tray does that instead)
+    if (e.pointerType !== "pen") return;
     const x = e.clientX, y = e.clientY, id = e.pointerId;
     pressFired = null;
     const timer = setTimeout(() => { if (!drag) { pressFired = id; fire(); } }, 500);
@@ -826,24 +951,73 @@ function stepMarker(now) {
 // ---- drag from tray --------------------------------------------------------
 let drag = null;
 function startPending(e, it, cell) {
-  if (e.button !== 0 || drag || fly) return;
-  const pend = { x: e.clientX, y: e.clientY, id: e.pointerId };
+  if (e.button !== 0 || drag || fly || editMode) return;
+  // touch pointers are captured by the tile they start on; the tray redraws mid-drag (holds echo
+  // back over the network) and a detached tile would swallow the rest of the gesture, so let go
+  try { if (cell.hasPointerCapture?.(e.pointerId)) cell.releasePointerCapture(e.pointerId); } catch {}
+  const pend = { x: e.clientX, y: e.clientY, id: e.pointerId, verdict: null, timer: 0 };
   const sheet = getComputedStyle(cell).touchAction === "pan-x";
+  const touch = e.pointerType === "touch";
+  // touch: the tray scrolls along one axis and things are dragged out across it. Decided once, at
+  // the first move past the slop, and shared with the touchmove guard so both agree.
+  pend.decide = (x, y) => {
+    if (pend.verdict) return pend.verdict;
+    const dx = x - pend.x, dy = y - pend.y;
+    if (Math.hypot(dx, dy) < DRAG_SLOP) return null;
+    const along = Math.abs(sheet ? dx : dy), across = Math.abs(sheet ? dy : dx), out = sheet ? -dy : -dx;
+    // mostly across the scroll axis, or slanting towards the scene (up from the bottom sheet, left
+    // from the side tray) by more than about 27 degrees: a drag. Anything flatter scrolls the tray.
+    pend.verdict = across > along || out > along * 0.5 ? "drag" : "scroll";
+    return pend.verdict;
+  };
   const move = (ev) => {
     if (ev.pointerId !== pend.id) return;
     if (pressFired === pend.id) return stop(); // a long-press asked for help: no drag
-    const dx = ev.clientX - pend.x, dy = ev.clientY - pend.y;
-    if (Math.hypot(dx, dy) < (ev.pointerType === "mouse" ? 4 : 8)) return;
-    // touch: the tray scrolls along one axis, dragging out goes along the other
-    if (ev.pointerType !== "mouse" && (sheet ? Math.abs(dx) > Math.abs(dy) : Math.abs(dy) > Math.abs(dx))) return stop();
+    if (ev.pointerType === "mouse") {
+      if (Math.hypot(ev.clientX - pend.x, ev.clientY - pend.y) < 4) return;
+    } else {
+      const v = pend.decide(ev.clientX, ev.clientY);
+      if (!v) return;
+      if (v === "scroll") return stop();
+    }
     stop();
     beginDrag(ev, it, cell);
   };
-  const stop = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", stop); removeEventListener("pointercancel", stop); };
+  const stop = () => {
+    clearTimeout(pend.timer);
+    if (touchPend === pend) touchPend = null;
+    removeEventListener("pointermove", move); removeEventListener("pointerup", stop); removeEventListener("pointercancel", stop);
+  };
   addEventListener("pointermove", move);
   addEventListener("pointerup", stop);
   addEventListener("pointercancel", stop);
+  if (touch) {
+    touchPend = pend;
+    // the touch stream keeps going to the tile it started on, even after a redraw detaches it
+    if (!guarded.has(cell)) { guarded.add(cell); cell.addEventListener("touchmove", guardTouch, { passive: false }); }
+    // press and hold still for a moment: the thing is picked up, and from then on any direction
+    // (even straight sideways) is a drag — the usual long-press-to-drag of phone home screens
+    pend.timer = setTimeout(() => {
+      if (touchPend !== pend || pend.verdict || drag || fly || editMode) return;
+      stop();
+      beginDrag({ clientX: pend.x, clientY: pend.y, pointerId: pend.id }, it, cell);
+    }, HOLD_MS);
+  }
 }
+// ---- touch: keep the browser from scrolling the tray under a drag -------------
+const DRAG_SLOP = 8, HOLD_MS = 220;
+let touchPend = null; // the touch press on a tile that hasn't yet become a drag or a scroll
+const guarded = new WeakSet();
+function guardTouch(e) {
+  if (!e.cancelable) return;
+  if (drag) return e.preventDefault();
+  const p = touchPend, t = e.touches.length === 1 && e.touches[0];
+  if (p && t && p.decide(t.clientX, t.clientY) === "drag") e.preventDefault();
+}
+// registered up front and not passive: iOS Safari ignores a touchmove listener added mid-gesture
+document.addEventListener("touchmove", guardTouch, { passive: false });
+// a long press on a tile, or while carrying something, never opens the browser's own menu
+addEventListener("contextmenu", (e) => { if (drag || touchPend) e.preventDefault(); });
 function beginDrag(e, it, cell) {
   hover(null);
   net.hold(it.id, true);
@@ -1062,18 +1236,36 @@ function renderUI() {
   document.title = t.pageTitle;
   $("brand").textContent = t.brand;
   $("lang-toggle").textContent = t.toggle;
-  $("back").textContent = t.back;
-  $("back").hidden = path.length < 2;
-  $("mute").textContent = muted ? "🔇" : "🔈";
+  $("lang-toggle").ariaLabel = t.toggleAria;
+  $("crumbs").ariaLabel = t.crumbsAria;
+  // wide screens: "‹ Back" beside the breadcrumb. Phones: no breadcrumb, so the button names
+  // where it goes ("‹ Counter"), and from the shop's top view it leads back to the town.
+  const townLabel = ownerName ? t.namedTown(ownerName) : guest ? t.friendTown : t.town;
+  const atTop = path.length < 2;
+  $("back").hidden = atTop && !townUrl;
+  $("back").classList.toggle("at-top", atTop);
+  $("back").querySelector(".wide").textContent = t.back;
+  $("back").querySelector(".narrow").textContent = `‹ ${atTop ? townLabel : crumbLabel(path[path.length - 2])}`;
+  $("mute").querySelector(".tool-ico").textContent = muted ? "🔇" : "🔈";
+  $("mute").querySelector(".tool-label").textContent = t.soundLabel;
   $("mute").setAttribute("aria-pressed", String(muted));
   $("mute").title = $("mute").ariaLabel = muted ? t.unmute : t.mute;
+  $("help").querySelector(".tool-label").textContent = t.helpLabel;
   $("help").title = $("help").ariaLabel = t.help;
+  idCard?.render();
+  $("who").hidden = !guest || !idCard?.choice();
+  if (guest && idCard) {
+    const c = idCard.choice(), w = whoLabel(lang, c);
+    $("who").querySelector(".tool-ico").textContent = c && !c.anon && c.name ? [...c.name][0] : "🙂";
+    $("who").querySelector(".tool-label").textContent = w.text;
+    $("who").title = $("who").ariaLabel = `${w.text} · ${w.title}`;
+  }
   if (!$("hint-card").hidden) fillHint();
   // breadcrumb (in a world, its root is the town)
   const crumbs = $("crumbs");
   crumbs.replaceChildren();
   if (townUrl) {
-    const a = document.createElement("a"); a.href = townUrl; a.className = "crumb-town"; a.textContent = guest ? t.friendTown : t.town;
+    const a = document.createElement("a"); a.href = townUrl; a.className = "crumb-town"; a.textContent = townLabel;
     const s = document.createElement("span"); s.className = "sep"; s.textContent = "›";
     crumbs.append(a, s);
     $("brand").href = townUrl;
@@ -1137,7 +1329,8 @@ function renderUI() {
       b.setAttribute("aria-pressed", String(on));
       b.title = b.ariaLabel = on ? t.askOn : t.askHere;
       b.onclick = () => toggleReq(sc, id);
-      $("req-hint").hidden = reqHintSeen || !here.length;
+      // only a mouse right-click asks for one thing; a finger's long-press starts a drag, so touch-only screens get no hint
+      $("req-hint").hidden = reqHintSeen || !here.length || !matchMedia("(any-hover: hover) and (any-pointer: fine)").matches;
       $("req-hint").textContent = t.reqHint;
     }
     const layers = [...new Set(here.map((it) => it.layer))].sort((a, b) => a - b);
@@ -1182,7 +1375,7 @@ function renderUI() {
   }
   renderPresence();
 }
-$("back").addEventListener("click", goBack);
+$("back").addEventListener("click", () => { if (path.length < 2 && townUrl) location.href = townUrl; else goBack(); });
 $("mute").addEventListener("click", () => {
   muted = !muted;
   try { localStorage.setItem(MUTE_KEY, muted ? "1" : "0"); } catch {}
@@ -1270,7 +1463,8 @@ function renderQuota() {
   const t = T();
   $("quota").hidden = !guest || !quota;
   if (!guest || !quota) return;
-  $("quota").textContent = t.leftToday(Math.max(0, quota.left));
+  $("quota").querySelector(".wide").textContent = t.leftToday(Math.max(0, quota.left));
+  $("quota").querySelector(".narrow").textContent = t.leftShort(Math.max(0, quota.left));
   $("quota-note").hidden = !spent();
   $("quota-note").textContent = quota.left <= 0 && quota.worldsLeft <= 0 && !helpedHere ? t.townsDone : t.enough;
 }
@@ -1301,8 +1495,25 @@ function scheduleRetry() {
   }, retryWait);
 }
 
+// a friend's name (from the town page's card) rides along with each placement
+const netExtra = worldShop ? { t: worldShop.t, helper } : {};
+// identity card (identity.js): a shop opened straight from a link asks too
+idCard = worldShop ? createIdentityCard({
+  world: world.world, role: guest ? "guest" : "owner", lang: () => lang, ownerName: () => ownerName,
+  save: guest ? null : async ({ name }) => {
+    const res = await fetch(`/api/worlds/${world.world}/name`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ t: worldShop.t, name }) });
+    if (!res.ok) throw new Error(String(res.status));
+    ownerName = (await res.json()).ownerName || "";
+  },
+  onChoose: (c) => { if (guest) setHelperName(c); renderUI(); },
+}) : null;
+// anonymous sends "" so a name stored from an earlier visit is cleared on the server
+function setHelperName(c) { netExtra.helperName = c && !c.anon ? c.name : ""; }
+if (guest) setHelperName(idCard.choice());
+if (idCard) $("who").addEventListener("click", () => idCard.open());
 if (reqOn) { buildReqTargets(); note = worldShop.note; setRequests(worldShop.requests); }
-const net = connect(shop, me, {
+// editor: no live connection at all, so nothing it does can reach the server
+const net = editMode ? { hold() {}, place: async () => "ok", close() {} } : connect(shop, me, {
   hello({ placed: list, present: n }) {
     // the server's list is the truth: add what's missing, take back what it never got
     const server = new Set(list);
@@ -1317,7 +1528,12 @@ const net = connect(shop, me, {
     retryWait = 2000; scheduleRetry();
     renderUI();
   },
-  placed({ item }) { retry.delete(item); landRemote(item); },
+  placed({ item, guest: byGuest, helperName: who }) {
+    retry.delete(item); landRemote(item);
+    // the owner hears, quietly, which named friend placed what
+    if (owner && byGuest && items.has(item)) showReqNote(T().helperPlaced(who, L(items.get(item).label)));
+  },
+  name({ ownerName: n }) { ownerName = n || ""; renderUI(); },
   hold({ item, client, holding }) {
     if (client === me || !items.has(item)) return;
     const s = held.get(item) || new Set();
@@ -1329,7 +1545,7 @@ const net = connect(shop, me, {
   requests({ requests: list }) { if (!reqOn) return; setRequests(list); renderUI(); },
   note({ note: n }) { if (!reqOn) return; note = n; renderUI(); },
   quota(q) { if (!guest) return; if (q.left < (quota?.left ?? 99)) helpedHere = true; quota = q; renderUI(); },
-}, worldShop ? { t: worldShop.t, helper } : {});
+}, netExtra);
 
 // soft glowing dots where someone else is reaching, only for what's on screen at this zoom
 const holdDots = new Map();
@@ -1369,31 +1585,20 @@ function stepHoldDots(now) {
 // presence + invite: quiet when someone's here, more visible when you're alone
 // in a world: the owner invites to the town with the guest link; a guest doesn't invite
 const link = worldShop ? (worldShop.guestToken ? `${location.origin}/w/${world.world}?t=${worldShop.guestToken}` : null) : shopUrl(shop);
-async function copyLink(btn) {
-  try { await navigator.clipboard.writeText(link); }
-  catch { const i = $("invite-link"); i.hidden = false; i.select(); try { document.execCommand("copy"); } catch {} }
-  const old = btn.textContent;
-  btn.textContent = T().copied;
-  setTimeout(() => { btn.textContent = old; renderPresence(); }, 1400);
-}
-function renderPresence() {
-  const t = T(), alone = present <= 1;
-  $("presence").hidden = alone;
-  $("presence").textContent = alone ? "" : t.present(present);
-  if (!link) { $("invite-small").hidden = $("invite-card").hidden = true; return; }
-  const inv = worldShop ? t.inviteTown : t.invite;
-  $("invite-small").hidden = alone;
-  if ($("invite-small").textContent !== t.copied) $("invite-small").textContent = t.inviteShort;
-  $("invite-small").title = inv;
-  $("invite-card").hidden = !alone;
-  $("invite-title").textContent = inv;
-  $("invite-note").textContent = worldShop ? t.inviteTownNote : t.inviteNote;
-  $("invite-link").value = link;
-  if ($("invite-copy").textContent !== t.copied) $("invite-copy").textContent = t.copy;
-}
-$("invite-copy").addEventListener("click", (e) => copyLink(e.currentTarget));
-$("invite-small").addEventListener("click", (e) => copyLink(e.currentTarget));
-$("invite-link").addEventListener("focus", (e) => e.currentTarget.select());
+// one friends button in the header (invite.js): a dot when someone else is here, and a small
+// card with the link when pressed. A guest has no link, so their button only shows who's here.
+const invite = createInvite($("friends"), {
+  link,
+  words: () => {
+    const t = T();
+    return {
+      label: link ? t.inviteShort : t.presentShort(present), title: worldShop ? t.inviteTown : t.invite, note: worldShop ? t.inviteTownNote : t.inviteNote,
+      copy: t.copy, copied: t.copied, share: t.share, presence: present > 1 ? t.present(present) : "",
+    };
+  },
+  shareText: () => (worldShop ? T().shareText(ownerName, link) : link),
+});
+function renderPresence() { invite.render(); }
 addEventListener("pagehide", () => { if (drag) net.hold(drag.it.id, false); net.close(); });
 
 // ---- loop --------------------------------------------------------------------
@@ -1415,6 +1620,7 @@ for (const on of onWall) for (const w of Object.keys(on)) on[w] = on[w].map((o) 
 function tick(now) {
   resize();
   pumpThumbs();
+  if (edit?.freeCam) { fly = orbit = null; edit.update(); }
   if (fly) {
     const k = fly.dur ? Math.min(1, (now - fly.t0) / fly.dur) : 1, e = ease(k);
     camera.position.lerpVectors(fly.from, fly.p, e);
@@ -1431,7 +1637,7 @@ function tick(now) {
     camera.position.copy(orbit.c).add(rel);
     if (k >= 1) orbit = null;
   }
-  camera.lookAt(look);
+  if (!edit?.freeCam) camera.lookAt(look);
   // looking at the yard, the café stays a closed building seen from outside
   const outside = isYard(viewLevel());
   for (const s of storeys) {
@@ -1450,6 +1656,7 @@ function tick(now) {
   stepMarker(now);
   stepHoldDots(now);
   stepReqGlow(now);
+  stepOcclusion();
   weather.update(Math.min(0.1, (now - (tick.last ?? now)) / 1000), camera.position); tick.last = now;
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
@@ -1483,7 +1690,27 @@ function showSeasonCard() {
 }
 const seasonNews = seasonItems.length > 0 && lastSeen !== season;
 try { localStorage.setItem(SEEN_KEY, season); } catch {}
+// a friend chooses each visit (once per tab: town → shop doesn't ask again); the owner only while unnamed
+if (idCard && (guest ? !enteredThisVisit(world.world) : !ownerName)) idCard.open();
 if (seasonNews) showSeasonCard();
 else if (!hintSeen) showHint();
+if (editMode) {
+  const { createEditor } = await import("./editor.js");
+  const byObj = new Map([...items.values()].map((it) => [it.obj, it]));
+  edit = createEditor({
+    name: rid(typeFromUrl()), scene, camera, canvas,
+    pickFrom: () => { const v = view(), lv = viewLevel(); if (v.kind === "building" || v.kind === "storey") return []; return [...items.values()].filter((it) => lv === null || it.level === lv).map((it) => it.obj); },
+    identify: (o) => { const it = byObj.get(o); return it ? { id: it.id, label: it.label.zh, obj: it.obj } : null; },
+    viewId: () => { const v = view(); return v.kind === "item" ? { kind: v.kind, id: v.id } : v.kind === "zone" ? { kind: v.kind, level: v.level, zone: v.zone } : v.kind === "storey" ? { kind: v.kind, level: v.level } : { kind: v.kind }; },
+    look: () => look,
+    onFreeCam: (on) => { if (!on) go(path); },
+    extraButtons: (sel) => {
+      const it = sel && items.get(sel.id);
+      return it && it.focus && it.children.length ? [["进入这件的视图", () => { edit.select(null); goInto({ kind: "item", id: it.id }); }]] : [];
+    },
+  });
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && edit.freeCam) { e.stopImmediatePropagation(); edit.setFreeCam(false); } }, true);
+  if (debug) globalThis.__edit = edit;
+}
 if (devTags) console.info("[play] dev fallback tags are active (no zone tags found)");
 requestAnimationFrame(tick);

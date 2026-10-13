@@ -48,7 +48,7 @@ export const LEVELS = [
     ],
     zones: {
       bar: {
-        label: { zh: "吧台", en: "Bar" },
+        label: { zh: "吧台", en: "Counter" },
         boxes: [
           { id: "main", x: [40, 300], y: [0, 280], z: [0, 300] },
           { id: "door", x: [180, 300], y: [0, 280], z: [300, 420] },

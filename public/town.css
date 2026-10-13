@@ -2,7 +2,6 @@
 body.town { --sky: #f6ecdc; }
 .tstage { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--sky); }
 #street { position: absolute; inset: 0; }
-.role-line { margin-left: auto; color: var(--stitch); }
 [hidden] { display: none !important; }
 .tstatus {
   position: absolute; z-index: 20; left: 50%; top: 38%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px);
@@ -15,20 +14,11 @@ body.town { --sky: #f6ecdc; }
   background: var(--card); border: 2px dashed var(--stitch); border-radius: 16px; padding: 10px 14px 12px;
   box-shadow: 0 6px 22px rgba(74, 46, 31, 0.12);
 }
-#invite-card, #guest-card { top: 14px; }
+#guest-card { top: 14px; }
 .tcard p { margin: 0 0 6px; line-height: 1.45; }
 .tcard-title { font-size: 0.98rem; }
 .tcard.season { left: 50%; top: 24%; transform: translateX(-50%); text-align: center; cursor: pointer; transition: opacity 0.8s; }
 .tcard.season.fading { opacity: 0; }
-.invite-row { display: flex; gap: 6px; }
-.invite-link {
-  flex: 1; min-width: 0; font: inherit; font-size: 0.75rem; color: var(--ink-soft); background: var(--paper);
-  border: 1.5px solid rgba(138, 90, 59, 0.3); border-radius: 8px; padding: 0.3em 0.5em;
-}
-.invite-copy {
-  font: inherit; font-size: 0.8rem; color: var(--card); background: var(--stitch); border: 0;
-  border-radius: 8px; padding: 0.3em 0.8em; cursor: pointer; white-space: nowrap;
-}
 @media (max-width: 700px) {
   .tcard { left: 12px; width: calc(100% - 24px); }
 }
@@ -74,12 +64,12 @@ body.town { --sky: #f6ecdc; }
 .nboard-btn.ghost { color: var(--ink-soft); background: transparent; border: 1.5px solid rgba(138, 90, 59, 0.35); }
 .nboard-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 @media (max-width: 700px) {
-  /* stack under the invite / guest card */
+  /* stack under the guest card */
   .nboard { right: 12px; left: 12px; width: auto; top: auto; position: absolute; }
 }
 
 /* the town's name in the header; the owner can tap it to rename */
-.town-name { font: inherit; font-size: 0.95rem; color: var(--ink); background: none; border: 0; padding: 0.15em 0.4em; border-radius: 8px; margin-left: 0.4em; }
+.town-name { font: inherit; font-size: 0.95rem; color: var(--ink); background: none; border: 0; padding: 0.15em 0.4em; border-radius: 8px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .town-name.editable { cursor: pointer; border-bottom: 1.5px dashed var(--stitch); border-radius: 0; }
 .town-name.editable:hover { background: var(--paper-2); }
-@media (max-width: 700px) { .role-line { display: none; } }
+@media (max-width: 700px) { body.town .brand { display: none; } }
