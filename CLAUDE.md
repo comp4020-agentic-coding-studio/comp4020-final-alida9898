@@ -45,18 +45,25 @@
   Never deploy without my go-ahead.
 
 ## 子 agent / Subagents
-固定四个，定义在 `.claude/agents/`。需要更细的分工时再加。
-Four fixed agents, defined in `.claude/agents/`. Add more when finer roles are needed.
+固定五个，定义在 `.claude/agents/`。需要更细的分工时再加。
+Five fixed agents, defined in `.claude/agents/`. Add more when finer roles are needed.
 
 | 名字 Name | 负责 Owns | 不准碰 Must not touch | 做完要交 Hands back |
 |---|---|---|---|
 | camera | 店里和小镇所有视角：取景、遮挡、平视或俯视 / every camera view in shops and town: framing, occlusion, eye-level vs top-down | 模型、界面文字 / models, UI text | 每个受影响的视角都截图，包括改动范围以外的 / screenshots of every affected view, including ones outside the change |
 | clay | `public/clay/models/` 里的模型和角色 / models and characters | 相机、布局坐标、服务器 / cameras, layout coords, server | 近景截图、改之前的对比、三角面数 / close-ups, before/after, triangle count |
 | ui | 页面上的按钮、卡片、文字、中英文 / buttons, cards, text, both languages | 3D 场景、服务器 / 3D scene, server | 电脑和手机宽度的截图 / desktop and phone-width screenshots |
+| mobile | 手机端：窄屏布局、触屏手势、手机上的 3D 显示 / phone: narrow layouts, touch gestures, 3D on phones | 先只查不改，除非我让修 / audit only unless asked to fix | 问题清单：页面、尺寸、问题、截图、严重程度、修法 / issue list with page, size, problem, screenshot, severity, fix |
 | checker | 只检查不改：`pnpm check`、控制台、按清单截图、两个窗口测多人 / checks only: `pnpm check`, console, checklist screenshots, two-tab multiplayer test | 任何代码 / any code | 通过或不通过，加上问题清单和截图 / pass/fail, issue list, screenshots |
 
+- 主会话不自己动手改代码。相机、模型、界面、手机端的改动，一律派给表里对应的 agent；主会话只负责写理解、分派、汇总结果。A、B 两种情况都一样，改动再小也一样。
+  The main session never edits code itself. Camera, model, UI and phone changes always go to the matching agent above; the main session only writes its understanding, dispatches, and sums up. This holds in both case A and case B, however small the change.
+- 表里没有对应 agent 的改动（比如服务器），先问我派给谁，不要自己做。
+  If no agent in the table owns a change (e.g. the server), ask me who should take it; don't do it yourself.
 - 改东西的 agent 做完，交给 checker 检查。不通过就退回去，最多两次，然后再给我看。
   A builder's work goes to checker; on failure it goes back, at most twice, then to me.
+- 每次 checker 检查都要包括手机端：同时派 mobile 按同一份清单查手机，结果并进 checker 的结论，手机端有严重问题也算不通过。
+  Every checker run includes phones: mobile checks the same list on phone sizes, and its findings count toward checker's verdict.
 - 动作要用预览页的"暂停 / 下一帧"逐帧检查，不能只看一张静止截图。
   Check motion frame by frame (pause / next frame), never from one still.
 - 声音、手感、好不好看，checker 判断不了，要说出来让我自己看。
