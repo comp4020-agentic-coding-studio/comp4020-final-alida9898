@@ -1,8 +1,15 @@
 # A Corner of Town / 小镇一角
 
-Two paired strangers each build half of a connected scene by sticking
-pre-made art into place — a shop front and counter on one side, the seating
-inside on the other. A door between them opens once both halves exist.
+Each player has their own town with four shops: a café, a flower shop, a
+bookshop and a bakery. Everything is a 3D model that looks like clay. A shop
+starts empty. You zoom in to a floor, then to one area, and drag each item to
+its place — for example the counter first, then the coffee machine on it,
+then the cup.
+
+Towns are separate. Your town is yours and a friend's town is theirs; they
+never merge. You can still visit: a friend who has your link can enter your
+town and place a few items for you each day, and with their link you can do
+the same in theirs. What you place in a friend's town stays in their town.
 
 ## What good means for this app
 
@@ -18,8 +25,8 @@ of thinking once it's spent.
 
 So this app tries to be the opposite of that: a place where you do something
 that looks a little boring on purpose, and nothing asks you to decide
-anything. Every sticker has exactly one place it goes; your only job is to
-notice where and press it down. Something gets built almost without you
+anything. Every object has exactly one place it goes; your only job is to
+notice where and set it down. Something gets built almost without you
 meaning to build it.
 
 Game designer Ian Bogost has written about this distinction in what he calls
@@ -42,7 +49,17 @@ at all, in exactly those gaps.
 
 ## What's deliberately not here
 
-No free placement, no open-ended creation, no typed chat between the two
-players, no accounts, no sticker shop, no multiple scenes to collect, nothing
-monetised. Every one of those would reintroduce a decision — which is the one
-thing this app is trying not to ask of you.
+No free placement, no open-ended creation, no chat, no accounts, no in-app
+shop, no choosing what to collect or unlock, nothing monetised. Every one of
+those would reintroduce a decision — which is the one thing this app is
+trying not to ask of you.
+
+Players can only say two things to each other. The owner can leave one short
+note on the town's noticeboard, and can flag parts of a shop where they want
+help.
+
+There is also no forced tutorial, no pop-up that interrupts, and no locked
+input. A hint shows once, the first time it is needed, and can be skipped.
+
+An item is never split into parts. One item is one thing a person could pick
+up and carry: the coffee machine is one item and the cup is another.
