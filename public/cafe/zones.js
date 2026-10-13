@@ -49,26 +49,38 @@ export const LEVELS = [
     zones: {
       bar: {
         label: { zh: "吧台", en: "Bar" },
-        boxes: [{ x: [40, 300], y: [0, 280], z: [0, 480] }],
-        notes: "Counter, its front at ~z 200 (staff side behind, z 60–150). Back bar + menu board on the back wall " +
-          "(z 0–50, x 40–290). Entrance by the door on the right wall (z 330–430): OPEN sign, doormat, " +
-          "umbrella stand, A-frame (A-frame may stand just outside the front, z ≤ 520). Pastry case on/at the counter.",
+        boxes: [
+          { id: "main", x: [40, 300], y: [0, 280], z: [0, 300] },
+          { id: "door", x: [180, 300], y: [0, 280], z: [300, 420] },
+        ],
+        notes: "FOCAL. L-shaped counter: main run x 45…295, z 122…178, return along the right wall x 240…295, " +
+          "z 178…258 (no counter chairs). Bean-jar wall shelf + menu board on the back wall. Entrance by the door " +
+          "(right wall z 330–430): OPEN sign, doormat, umbrella stand, A-frame — all inside, z ≤ 420.",
+      },
+      window: {
+        label: { zh: "窗边", en: "Window & booth" },
+        boxes: [
+          { id: "bay", x: [-300, -65], y: [0, 280], z: [0, 100] },
+          { id: "booth", x: [-210, -50], y: [0, 280], z: [180, 360] },
+        ],
+        notes: "Bay seat under the back arched window; chalkboard on the back wall right of it; banquette along " +
+          "the stair side (x −210…−155, z 190…350) with one long table and two backed chairs.",
       },
       seating: {
-        label: { zh: "座位", en: "Seating" },
+        label: { zh: "座位", en: "Tables" },
         boxes: [
-          { id: "main", x: [-200, 40], y: [0, 280], z: [180, 480] },
-          { id: "nook", x: [-300, -75], y: [0, 280], z: [0, 150] },
+          { id: "mid", x: [-50, 40], y: [0, 280], z: [180, 360] },
+          { id: "front", x: [40, 180], y: [0, 280], z: [330, 420] },
         ],
-        notes: "4–5 small round tables + chairs; ≥ 60 cm between tables. The nook is the back-left corner " +
-          "under the back window (one table). Keep the walkways clear.",
+        notes: "Two round tables with backed chairs. Everything z ≤ 420 (nothing near the open front).",
       },
     },
     walkways: {
-      entry: { x: [180, 300], y: [0, 220], z: [300, 460] },
-      barFront: { x: [40, 300], y: [0, 220], z: [215, 300] },
+      entry: { x: [180, 300], y: [0, 220], z: [320, 420] },
+      barFront: { x: [40, 230], y: [0, 220], z: [225, 300] },
+      toStairs: { x: [-170, 40], y: [0, 220], z: [360, 440] },
       stairFoot: { x: [-300, -170], y: [0, 220], z: [440, 480] },
-      toNook: { x: [-210, 40], y: [0, 220], z: [100, 180] },
+      toWindow: { x: [-150, 40], y: [0, 220], z: [100, 180] },
     },
   },
   {
@@ -81,20 +93,22 @@ export const LEVELS = [
       { kind: "window", wall: "left", along: 320, y: 110, width: 90, height: 120 },
     ],
     zones: {
+      reading: {
+        label: { zh: "读书角", en: "Reading corner" },
+        boxes: [{ x: [25, 300], y: [0, 280], z: [0, 200] }],
+        notes: "FOCAL. Armchair in front of the back arched window, floor lamp, side table with book + cup.",
+      },
       lounge: {
-        label: { zh: "阅读角", en: "Lounge" },
-        boxes: [
-          { id: "main", x: [30, 300], y: [0, 280], z: [0, 480] },
-          { id: "front", x: [-200, 30], y: [0, 280], z: [190, 480] },
-        ],
-        notes: "Armchair nook, blanket, side tables, floor lamp, bookshelf + books, frames, window plants, " +
-          "optional cat spot. The stairwell rail runs along x = -210 (z 160–440) and z = 440 (x -300..-210).",
+        label: { zh: "客厅", en: "Lounge" },
+        boxes: [{ x: [30, 300], y: [0, 280], z: [200, 420] }],
+        notes: "Two loveseats facing across a low coffee table; mixed bookshelf on the right wall; plants on the " +
+          "right window sill. Front 60 cm of the slab stays empty.",
       },
       brewing: {
-        label: { zh: "手冲台", en: "Brewing" },
+        label: { zh: "手冲", en: "Slow bar" },
         boxes: [{ x: [-200, 30], y: [0, 280], z: [0, 120] }],
-        notes: "Sideboard against the back wall LEFT of the tube (x -200..-70) with the six brewing tools on " +
-          "its top (y = 90): roaster, grinder, moka pot, French press, pour-over, milk frother. Shelves above.",
+        notes: "Sideboard on the back wall x −200…−70, roaster at its right end next to the bean tube; the one " +
+          "large artwork hangs above it.",
       },
     },
     walkways: {

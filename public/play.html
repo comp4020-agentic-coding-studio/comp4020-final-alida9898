@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>小镇一角 · 摆一摆</title>
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/play.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body class="house play">
+    <header class="bar">
+      <button id="lang-toggle" class="lang-toggle bar-toggle" type="button" aria-label="Switch language">EN</button>
+      <a href="/" class="brand" id="brand">小镇一角</a>
+      <button id="back" class="back-btn" type="button" hidden></button>
+      <nav id="crumbs" class="crumbs" aria-label="breadcrumb"></nav>
+      <span class="bar-tools">
+        <button id="mute" class="icon-btn" type="button" aria-pressed="false">🔈</button>
+        <button id="help" class="icon-btn" type="button">?</button>
+      </span>
+    </header>
+    <main class="stage">
+      <canvas id="house"></canvas>
+      <p id="loading" class="loading small"></p>
+      <div id="hint-card" class="hint-card" role="dialog" aria-labelledby="hint-title" hidden>
+        <p id="hint-title" class="hint-title"></p>
+        <ul id="hint-list" class="hint-list"></ul>
+        <p id="hint-close" class="small hint-close"></p>
+      </div>
+      <aside id="tray" class="ptray" aria-live="polite">
+        <div class="ptray-head">
+          <p id="tray-title" class="ptray-title"></p>
+          <p id="tray-progress" class="small ptray-progress"></p>
+        </div>
+        <p id="tray-hint" class="small ptray-hint"></p>
+        <div id="tray-body" class="ptray-body"></div>
+        <div id="tray-foot" class="ptray-foot small"></div>
+      </aside>
+    </main>
+    <script type="module" src="/play.js"></script>
+  </body>
+</html>

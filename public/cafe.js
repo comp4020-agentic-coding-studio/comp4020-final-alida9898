@@ -7,6 +7,7 @@ import { ROOM, LEVELS, STOREY_H, levelY } from "./cafe/zones.js";
 import { buildStorey } from "./cafe/storey.js";
 import { buildTube } from "./cafe/tube.js";
 import { model, place, topOf } from "./cafe/place.js";
+import { wallAttached } from "./cafe/build.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -115,7 +116,6 @@ for (const L of LEVELS) {
   });
   storey.position.y = levelY(L.level);
   scene.add(storey);
-  sideWalls.push(walls);
   for (const [id, zone] of Object.entries(L.zones)) {
     const group = new THREE.Group(); group.name = `zone-${id}`;
     storey.add(group); // storey-local: y = 0 is this floor
@@ -126,6 +126,8 @@ for (const L of LEVELS) {
       console.error(`zone ${id} failed to populate`, err);
     }
   }
+  // things hung on / against a side wall go when the wall goes, or they float
+  sideWalls.push({ walls, on: wallAttached(storey) });
 }
 scene.add(buildTube(kit, { levels: N }));
 
@@ -155,9 +157,11 @@ function tick(now) {
   t.z = THREE.MathUtils.clamp(t.z, 0, rz1);
   controls.update();
   // dollhouse: a side wall the camera has swung past is hidden so it never blocks the view
-  for (const w of sideWalls) {
+  for (const { walls: w, on } of sideWalls) {
     w.left.visible = camera.position.x > rx0;
     w.right.visible = camera.position.x < rx1;
+    for (const o of on.left) o.visible = w.left.visible;
+    for (const o of on.right) o.visible = w.right.visible;
   }
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
