@@ -43,6 +43,10 @@ const TEXT = {
     newTag: "新",
     seasonCard: (s, n) => `${s}到了，店里多了 ${n} 件${s}的小东西`,
     seasonClose: "点一下就关上",
+    town: "我的小镇", friendTown: "朋友的小镇",
+    leftToday: (n) => `今天还能帮 ${n} 件`, enough: "今天帮够啦，明天再来",
+    townsDone: "今天已经帮了 3 个小镇啦，明天再来",
+    inviteTown: "邀请朋友来帮忙", inviteTownNote: "把这个链接发给朋友：他们每天能帮你放 8 件东西。",
   },
   en: {
     brand: "A Corner of Town", toggle: "中文", cafe: "Café", back: "‹ Back", loading: "Shaping the café out of clay…",
@@ -65,6 +69,10 @@ const TEXT = {
     newTag: "new",
     seasonCard: (s, n) => `${s} is here — ${n} ${s.toLowerCase()} thing${n === 1 ? "" : "s"} to place`,
     seasonClose: "Tap to close",
+    town: "My town", friendTown: "Friend's town",
+    leftToday: (n) => `${n} left today`, enough: "That's enough for today — come back tomorrow",
+    townsDone: "You've helped 3 towns today — come back tomorrow",
+    inviteTown: "Invite a friend to help", inviteTownNote: "Send this link to a friend: they can place up to 8 things a day for you.",
   },
 };
 const LANG_KEY = "lang";
@@ -77,9 +85,17 @@ const L = (label) => label[lang] || label.zh || label.en;
 // `/shop/<id>` (open shop) or `/w/<world>/<type>?t=<token>` (a shop in a world)
 const world = worldFromUrl();
 const me = clientId();
-const worldShop = world ? await loadWorldShop(world, me).catch(() => null) : null;
+// quotas count per browser: the same helper id the town page keeps
+const helper = (() => { try { const h = localStorage.getItem("town-helper-v1"); if (h && /^[\w-]{1,64}$/.test(h)) return h; localStorage.setItem("town-helper-v1", me); } catch {} return me; })();
+const worldShop = world ? await loadWorldShop(world, helper).catch(() => null) : null;
 const shop = world ? worldShop && worldShop.shop : shopFromUrl();
-if (!shop) { location.replace("/"); await new Promise(() => {}); }
+if (!shop) { location.replace(world ? `/w/${world.world}?t=${encodeURIComponent(world.t)}` : "/"); await new Promise(() => {}); }
+// a guest helps with a daily quota; the owner places freely
+const guest = !!worldShop && worldShop.role === "guest";
+let quota = guest ? worldShop.quota : null;
+const townUrl = world ? `/w/${world.world}?t=${encodeURIComponent(world.t)}` : null;
+let helpedHere = false; // placed here this visit (so a 0 means "enough", not "3 towns")
+const spent = () => guest && !!quota && quota.left <= 0;
 const placed = new Set();
 const shopLoad = (async () => {
   for (let i = 0; ; i++) {
@@ -261,7 +277,8 @@ function preferredAngle(v, box) {
   if (fromLeft(v, box.getCenter(new THREE.Vector3()))) az = -az * 0.5;
   // things against the back wall left of the bean tube are seen from the left, so the tube never stands in front of them
   const c = box.getCenter(new THREE.Vector3());
-  if ((v.kind === "zone" || v.kind === "item") && c.x < TUBE.x - 40 && c.z < TUBE.keepout.z[1] + 60) az = -az;
+  // shops without the café's bean tube have nothing here to look past
+  if (TUBE && (v.kind === "zone" || v.kind === "item") && c.x < TUBE.x - 40 && c.z < TUBE.keepout.z[1] + 60) az = -az;
   if (v.kind === "item") {
     // a focus piece that faces sideways (a board on a side wall) is looked at face-on
     const f = new THREE.Vector3(0, 0, 1).applyQuaternion(items.get(v.id).obj.getWorldQuaternion(new THREE.Quaternion()));
@@ -804,7 +821,8 @@ function cellFor(it) {
     cell.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fly_(); } });
   }
   if (!thumbs.has(it.id)) { const q = thumbQueue.indexOf(it.id); if (q > 0) thumbQueue.unshift(...thumbQueue.splice(q, 1)); }
-  if (state === "open") cell.addEventListener("pointerdown", (e) => startPending(e, it, cell));
+  if (state === "open" && spent()) cell.classList.add("spent");
+  else if (state === "open") cell.addEventListener("pointerdown", (e) => startPending(e, it, cell));
   cell.title = heldHere ? `${L(it.label)} · ${T().holding}` : L(it.label);
   return { cell, order: { open: 0, far: 1, locked: 2 }[state] ?? 3 };
 }
@@ -840,9 +858,16 @@ function renderUI() {
   $("mute").title = $("mute").ariaLabel = muted ? t.unmute : t.mute;
   $("help").title = $("help").ariaLabel = t.help;
   if (!$("hint-card").hidden) fillHint();
-  // breadcrumb
+  // breadcrumb (in a world, its root is the town)
   const crumbs = $("crumbs");
   crumbs.replaceChildren();
+  if (townUrl) {
+    const a = document.createElement("a"); a.href = townUrl; a.className = "crumb-town"; a.textContent = guest ? t.friendTown : t.town;
+    const s = document.createElement("span"); s.className = "sep"; s.textContent = "›";
+    crumbs.append(a, s);
+    $("brand").href = townUrl;
+  }
+  renderQuota();
   path.forEach((p, i) => {
     if (i) { const s = document.createElement("span"); s.className = "sep"; s.textContent = "›"; crumbs.append(s); }
     if (i === path.length - 1) { const s = document.createElement("span"); s.className = "here"; s.textContent = crumbLabel(p); crumbs.append(s); }
@@ -1007,12 +1032,21 @@ function revert(it) {
   document.body.append(el);
   floatHome(el, it.id, null, true);
 }
+/** A guest's daily help: the header count, and the tray note once it's used up. */
+function renderQuota() {
+  const t = T();
+  $("quota").hidden = !guest || !quota;
+  if (!guest || !quota) return;
+  $("quota").textContent = t.leftToday(Math.max(0, quota.left));
+  $("quota-note").hidden = !spent();
+  $("quota-note").textContent = quota.left <= 0 && quota.worldsLeft <= 0 && !helpedHere ? t.townsDone : t.enough;
+}
 async function sendPlace(it) {
   inflight.add(it.id);
   const r = await net.place(it.id);
   inflight.delete(it.id);
   if (r === "ok" || r === "taken") { retry.delete(it.id); return; } // taken: the other person put it there first, it's placed either way
-  if (r === "full") { revert(it); return; }
+  if (r === "full" || r === "quota") { revert(it); return; }
   if (placed.has(it.id) && !retry.has(it.id)) revert(it);
   retry.add(it.id);
   scheduleRetry();
@@ -1027,7 +1061,7 @@ function scheduleRetry() {
       if (it.parent && !placed.has(it.parent)) continue; // wait for what it sits on
       const r = await net.place(id);
       if (r === "ok" || r === "taken") { retry.delete(id); landRemote(id); } // the "placed" event may beat us; landRemote is idempotent
-      else if (r === "full") retry.delete(id);
+      else if (r === "full" || r === "quota") retry.delete(id);
     }
     retryWait = Math.min(30000, retryWait * 2);
     scheduleRetry();
@@ -1058,7 +1092,8 @@ const net = connect(shop, me, {
     renderUI();
   },
   presence({ present: n }) { present = n; renderPresence(); },
-}, worldShop ? { t: worldShop.t, helper: me } : {});
+  quota(q) { if (!guest) return; if (q.left < (quota?.left ?? 99)) helpedHere = true; quota = q; renderUI(); },
+}, worldShop ? { t: worldShop.t, helper } : {});
 
 // soft glowing dots where someone else is reaching, only for what's on screen at this zoom
 const holdDots = new Map();
@@ -1096,7 +1131,8 @@ function stepHoldDots(now) {
 }
 
 // presence + invite: quiet when someone's here, more visible when you're alone
-const link = shopUrl(shop);
+// in a world: the owner invites to the town with the guest link; a guest doesn't invite
+const link = worldShop ? (worldShop.guestToken ? `${location.origin}/w/${world.world}?t=${worldShop.guestToken}` : null) : shopUrl(shop);
 async function copyLink(btn) {
   try { await navigator.clipboard.writeText(link); }
   catch { const i = $("invite-link"); i.hidden = false; i.select(); try { document.execCommand("copy"); } catch {} }
@@ -1108,12 +1144,14 @@ function renderPresence() {
   const t = T(), alone = present <= 1;
   $("presence").hidden = alone;
   $("presence").textContent = alone ? "" : t.present(present);
+  if (!link) { $("invite-small").hidden = $("invite-card").hidden = true; return; }
+  const inv = worldShop ? t.inviteTown : t.invite;
   $("invite-small").hidden = alone;
   if ($("invite-small").textContent !== t.copied) $("invite-small").textContent = t.inviteShort;
-  $("invite-small").title = t.invite;
+  $("invite-small").title = inv;
   $("invite-card").hidden = !alone;
-  $("invite-title").textContent = t.invite;
-  $("invite-note").textContent = t.inviteNote;
+  $("invite-title").textContent = inv;
+  $("invite-note").textContent = worldShop ? t.inviteTownNote : t.inviteNote;
   $("invite-link").value = link;
   if ($("invite-copy").textContent !== t.copied) $("invite-copy").textContent = t.copy;
 }

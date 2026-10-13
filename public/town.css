@@ -1,0 +1,45 @@
+/* the town page: one street, four plots */
+body.town { --sky: #f6ecdc; }
+.tstage { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--sky); }
+#street { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.role-line { margin-left: auto; color: var(--stitch); }
+[hidden] { display: none !important; }
+.plots { position: absolute; inset: 0; pointer-events: none; }
+.plot {
+  position: absolute; transform: translate(-50%, 0); pointer-events: auto; cursor: pointer;
+  font: inherit; color: var(--ink); text-decoration: none; text-align: center; white-space: nowrap;
+  background: var(--card); border: 2px dashed var(--stitch); border-radius: 14px; padding: 4px 12px 5px;
+  box-shadow: 0 4px 14px rgba(74, 46, 31, 0.12); transition: transform 0.15s;
+}
+.plot:hover, .plot:focus-visible { transform: translate(-50%, -3px); }
+.plot .pname { display: block; font-size: 0.95rem; }
+.plot .pmeta { display: block; font-size: 0.72rem; color: var(--ink-soft); }
+.plot .ptag { font-size: 0.66rem; padding: 0 5px; margin-left: 4px; border-radius: 8px; background: var(--paper-2); color: var(--ink-soft); }
+.tstatus { position: absolute; left: 0; right: 0; top: 40%; text-align: center; margin: 0; }
+.tstatus:empty { display: none; }
+.tcard {
+  position: absolute; z-index: 15; left: 16px; width: min(21rem, calc(100% - 32px)); box-sizing: border-box;
+  background: var(--card); border: 2px dashed var(--stitch); border-radius: 16px; padding: 10px 14px 12px;
+  box-shadow: 0 6px 22px rgba(74, 46, 31, 0.12);
+}
+#invite-card, #guest-card { top: 14px; }
+.tcard p { margin: 0 0 6px; line-height: 1.45; }
+.tcard-title { font-size: 0.98rem; }
+.tcard.season { left: 50%; top: 24%; transform: translateX(-50%); text-align: center; cursor: pointer; transition: opacity 0.8s; }
+.tcard.season.fading { opacity: 0; }
+.invite-row { display: flex; gap: 6px; }
+.invite-link {
+  flex: 1; min-width: 0; font: inherit; font-size: 0.75rem; color: var(--ink-soft); background: var(--paper);
+  border: 1.5px solid rgba(138, 90, 59, 0.3); border-radius: 8px; padding: 0.3em 0.5em;
+}
+.invite-copy {
+  font: inherit; font-size: 0.8rem; color: var(--card); background: var(--stitch); border: 0;
+  border-radius: 8px; padding: 0.3em 0.8em; cursor: pointer; white-space: nowrap;
+}
+@media (max-width: 700px) {
+  .tcard { left: 12px; width: calc(100% - 24px); }
+  .plot { padding: 3px 7px 4px; }
+  .plot .pname { font-size: 0.8rem; }
+  .plot .pmeta { font-size: 0.64rem; }
+}
+@media (prefers-reduced-motion: reduce) { .plot, .tcard.season { transition: none; } }

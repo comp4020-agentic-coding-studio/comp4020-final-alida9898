@@ -10,6 +10,11 @@
       .cafe-buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
       .cafe-buttons .btn { margin: 0.8rem 0 0.4rem; padding: 0.6em 1.5em; }
       .btn-soft { color: var(--stitch); background: var(--card); outline-color: var(--stitch); border-color: var(--stitch); }
+      .town-entry { margin: 1.6rem 0 0.4rem; }
+      [hidden] { display: none !important; }
+      .btn-big { font-size: 1.15rem; padding: 0.7em 1.8em; margin: 0.4rem 0; display: inline-block; text-decoration: none; }
+      .cafe-entry { opacity: 0.9; }
+      .cafe-buttons .btn { font-size: 0.9rem; }
       .older { margin-top: 2.5rem; }
       .town-map.secondary { width: min(100%, 380px); margin-top: 0.4rem; opacity: 0.85; }
     </style>
@@ -23,6 +28,12 @@
         你拼一半，一个陌生人拼另一半：一边是店门口和柜台，一边是里屋的座位。<br />
         一个人也能拼完。两个人都在的时候，中间那扇门会打开。
       </p>
+      <div class="town-entry">
+        <button id="start-town" class="btn btn-big" type="button">开始我的小镇</button>
+        <p id="back-town" hidden><a class="btn btn-big" href="#">回到我的小镇</a></p>
+        <p class="small" id="town-lede">一条街，四家小店，一件一件摆好。可以请朋友来帮忙。</p>
+        <p id="town-error" class="small" hidden></p>
+      </div>
       <div class="cafe-entry">
         <p class="small" id="cafe-lede">和一个人一起，把一家咖啡馆一件一件摆好。同一个链接，同一家店。</p>
         <div class="cafe-buttons">
@@ -59,6 +70,8 @@
           openCafe: "开一家店", joinCafe: "随便进一家", backCafe: "回到我的店 →",
           cafeError: "店门暂时没打开，过一会儿再试试。",
           older: "更早的贴纸版本：",
+          startTown: "开始我的小镇", backTown: "回到我的小镇", townLede: "一条街，四家小店，一件一件摆好。可以请朋友来帮忙。",
+          townError: "小镇暂时没打开，过一会儿再试试。",
           inviteCaption: "有人邀请你一起拼这个场景，点它加入 →",
           inviteInvalid: "这个邀请链接已经失效了，帮你开一个新的吧。",
           inviteFull: "这个场景已经有两个人在拼了，帮你开一个新的吧。",
@@ -77,6 +90,8 @@
           openCafe: "Open a café", joinCafe: "Join a café", backCafe: "Back to my café →",
           cafeError: "The door didn't open just now. Try again in a moment.",
           older: "The earlier sticker version:",
+          startTown: "Start my town", backTown: "Back to my town", townLede: "One street, four little shops, set up one thing at a time. Friends can help.",
+          townError: "The town didn't open just now. Try again in a moment.",
           inviteCaption: "Someone invited you to build this scene with them — tap to join →",
           inviteInvalid: "That invite link isn't valid anymore — starting you a fresh one instead.",
           inviteFull: "Two people are already building this one — starting you a fresh one instead.",
@@ -105,12 +120,40 @@
         document.querySelector("#back-cafe a").textContent = t.backCafe;
         document.getElementById("cafe-error").textContent = t.cafeError;
         document.getElementById("older").textContent = t.older;
+        document.getElementById("start-town").textContent = t.startTown;
+        document.querySelector("#back-town a").textContent = t.backTown;
+        document.getElementById("town-lede").textContent = t.townLede;
+        document.getElementById("town-error").textContent = t.townError;
       }
       applyLang();
       document.getElementById("lang-toggle").addEventListener("click", () => {
         lang = lang === "zh" ? "en" : "zh";
         try { localStorage.setItem(LANG_KEY, lang); } catch {}
         applyLang();
+      });
+
+      // my town: one world per browser, remembered with its owner token
+      const TOWN_KEY = "town-owner-v1";
+      let mine = null;
+      try { mine = JSON.parse(localStorage.getItem(TOWN_KEY) || "null"); } catch {}
+      if (mine && /^[\w-]+$/.test(mine.world || "") && mine.owner) {
+        document.getElementById("start-town").hidden = true;
+        const b = document.getElementById("back-town");
+        b.hidden = false;
+        b.querySelector("a").href = `/w/${mine.world}?t=${encodeURIComponent(mine.owner)}`;
+      }
+      document.getElementById("start-town").addEventListener("click", async (e) => {
+        e.currentTarget.disabled = true;
+        try {
+          const res = await fetch("/api/worlds", { method: "POST" });
+          if (!res.ok) throw new Error(String(res.status));
+          const { world, owner } = await res.json();
+          try { localStorage.setItem(TOWN_KEY, JSON.stringify({ world, owner })); } catch {}
+          location.href = `/w/${world}?t=${encodeURIComponent(owner)}`;
+        } catch {
+          document.getElementById("town-error").hidden = false;
+          e.currentTarget.disabled = false;
+        }
       });
 
       // the shared café: a shop id is the whole invitation

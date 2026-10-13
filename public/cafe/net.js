@@ -25,7 +25,7 @@ export async function loadWorldShop({ world, type, t }, helper) {
   if (!res.ok) throw new Error(`world ${res.status}`);
   const data = await res.json();
   const s = (data.shops || []).find((x) => x.type === type);
-  return s ? { shop: s.shop, t, role: data.role } : null;
+  return s ? { shop: s.shop, t, role: data.role, guestToken: data.guestToken || null, quota: data.quota || null } : null;
 }
 
 /** A random id per tab, kept across reloads of that tab. */
@@ -59,7 +59,8 @@ export async function loadShop(shop) {
  * Live link to a shop. `on` = { hello, placed, hold, presence } handlers.
  * place(item) resolves "ok" | "taken" | "full" | "error" (network / server trouble).
  * `extra` is sent with every POST (a world shop's `{ t, helper }`); a 429 (daily
- * helper quota) or 403 resolves "full", so the drop goes back quietly.
+ * helper quota) resolves "quota" and a 403 "full", so the drop goes back.
+ * A guest's quota (from a 200 or a 429) is passed to `on.quota({ left, worldsLeft })`.
  */
 export function connect(shop, client, on, extra = {}) {
   const base = `/api/shops/${shop}`;
@@ -78,8 +79,17 @@ export function connect(shop, client, on, extra = {}) {
     async place(item) {
       try {
         const res = await post("place", { item });
-        if (res.ok) return "ok";
-        if (res.status === 429 || res.status === 403) return "full";
+        if (res.ok) {
+          const body = await res.json().catch(() => ({}));
+          if (body.quota) on.quota?.(body.quota);
+          return "ok";
+        }
+        if (res.status === 429) {
+          const body = await res.json().catch(() => ({}));
+          on.quota?.(body.quota || { left: 0, worldsLeft: 0 });
+          return "quota";
+        }
+        if (res.status === 403) return "full";
         if (res.status === 409) {
           const { error } = await res.json().catch(() => ({}));
           return error === "full" ? "full" : "taken";
