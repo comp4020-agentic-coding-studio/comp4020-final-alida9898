@@ -66,3 +66,111 @@ illustration style. Deploy is the course's standard `flyctl deploy
 --remote-only --ha=false`; the repo went public and the app went live for
 crit 8, both confirmed against the live deployment (join a room, place a
 sticker, reload, find it still there).
+
+# After crit 8
+
+Everything above describes the sticker version shown at crit 8. The sections
+below cover what changed on the way to crit 9.
+
+## From flat stickers to 3D clay
+
+The scene stopped being a collage of flat pictures and became a small 3D
+world made of clay-looking models built in code with Three.js. It started as a
+side experiment — a clay-versus-felt style comparison
+([`25e963d`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/25e963d220c1f8998deb458c8c0c7ef5dd10b03b)) and a pipeline that rendered clay models back out as stickers
+([`f3bce67`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/f3bce67382f4227e088c3c9afa1d6e752b28e09b)) — and then the models stayed in 3D: a two-storey café shell
+([`29cb9f0`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/29cb9f03468e69f6dc6828d66920fb7120d5304f)) and a placement game where you step closer, floor by floor
+and corner by corner, before placing anything ([`d0a3e93`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/d0a3e937443293e4aa8bfca13c77b13e4e784a44)).
+
+The design rule from crit 8 carried over unchanged: every object has one fixed
+place and the player makes no decisions. Two rules were added to keep the 3D
+version just as calm. One item is one thing a person could pick up and carry
+([`e6d01d6`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/e6d01d6c5e598ba812c812ffe7e0c48332059df6)) — a coffee machine is one piece, its cup is another, nothing
+is split into parts. And small things can only be placed after zooming into
+the piece they sit on, so nobody has to aim at a cup from across the room.
+
+A grey tabby cat ([`c322a8f`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/c322a8f084f2075bb2e48dff623557c2086d163c)) is the only character, with idle motions and
+its own preview page for checking them.
+
+## From a paired room to a town of shops
+
+The crit 8 version paired two visitors into one room. That became: each person
+owns a town of four shops ([`0dd5df0`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/0dd5df090d98f826c66cf280664e18610f759e4b)), opened from a 3D street
+([`ff36807`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/ff36807827d48bcf4f9f3777c74301bda25b9271)). There are still no accounts. An owner link places freely; a
+guest link lets a friend help with a daily limit, so a town stays mostly its
+owner's work. Two people in the same shop see each other's placements live
+([`afc5634`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/afc56342f273ac7839542b7d633acf1953b9093e)).
+
+Around that: seasons that change the sky, weather and a few seasonal items; a
+noticeboard where the owner leaves one short note ([`1d12b7a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/1d12b7aa9e2fb4694d46863f58b8b6bc4dec9f68)); and a way
+for the owner to flag the parts of a shop they would like help with
+([`faa5410`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/faa5410a5579dc3226e510b4a29c8e4faeb9f2fe)). A friend chooses a name or stays anonymous each time they
+visit; the owner names their town once ([`f141341`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/f14134125c261d02c8317cac935218beec7b8680)).
+
+## Working rules and fixed agent roles
+
+With the 3D version, a single change could quietly break something elsewhere —
+moving a camera for one counter changed what another view could see. So the
+way of working was written down in `CLAUDE.md` ([`9e3c438`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/9e3c4387afffc33bf35a37645b70a52fd9877ff1)) and split
+between fixed subagents in `.claude/agents/`, each with things it owns and
+things it must not touch:
+
+- **camera** — every view in the shops and the town: framing, occlusion,
+  eye-level or top-down.
+- **clay** — the models and the cat.
+- **ui** — buttons, cards and text, in both languages.
+- **mobile** — narrow layouts and touch gestures.
+- **checker** — changes no code. It runs `pnpm check`, reads the console,
+  takes the checklist screenshots and tests two tabs together, and every run
+  includes the phone sizes.
+
+A builder's work goes to the checker; a failure goes back at most twice and
+then comes to me. The rules also say what the checker cannot judge — sound,
+feel, whether something looks good — so those are handed to me to look at
+rather than being reported as passing.
+
+The visual editor idea from crit 8 came along too. Adding `?editor` to any
+page ([`f141341`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/f14134125c261d02c8317cac935218beec7b8680)) lets me drag an item's position and size, or adjust the
+current camera view, and export the numbers to a file. I fix the layout by
+hand, say it is saved, and the agent applies those numbers. It only exists in
+local development and never changes live data.
+
+## What went wrong, and what was done about it
+
+- **Views blocked by other things.** In 3D, furniture and trees could stand
+  between the camera and the piece being placed. Views that show things on a
+  wall or a counter were moved to eye level ([`266bf5a`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/266bf5a96b960696cdd7aec30ac9e20aeb7e1f71)), and far trees in
+  the camera's way are hidden ([`e966cac`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/e966cac30908c5b0399bd9e0f6e44f88e9459a6c)). A further fix fades whatever
+  stands in front of the target; the checker went through three corners on
+  each floor and the yard, and reported one sign by the door that is still
+  half hidden by the door frame.
+- **Running out of budget mid-task.** The API allowance ran out while several
+  agents were part-way through edits. What made it recoverable was a written
+  handoff note listing which files were uncommitted, which agents had been
+  stopped mid-work, and what was still unverified. The next session began by
+  checking that note against `git status` before changing anything.
+- **The main session doing the agents' work.** On resuming, the main session
+  rewrote the toolbar itself instead of handing it to the ui agent. I pointed
+  it out, the work was handed to the ui and mobile agents to review and
+  finish, and a rule was added to `CLAUDE.md`: the main session writes its
+  understanding, dispatches and sums up, and does not edit code itself.
+- **Dragging did not work on a real phone.** It worked in a desktop browser.
+  One cause found so far: a drag aimed diagonally at its target was being read
+  as scrolling the tray, so it never started. The fix (press and hold to pick
+  up, and a wider angle for a direct drag) passes with simulated touch events,
+  but simulated events do not go through a real browser's gesture handling, so
+  it still has to be confirmed on a phone.
+
+## How the work is checked
+
+- `pnpm check` runs the type check and the tests in `spec/` (46 at the time of
+  writing), which cover the server rules: shops, worlds, daily help limits,
+  names, help requests and the layout invariants.
+- Camera changes are checked by screenshotting every affected view, including
+  views outside the change.
+- Motion is checked frame by frame on the cat preview page (pause / next
+  frame), not from one still image.
+- Interface changes are checked at desktop and phone widths, in both
+  languages.
+- Backups are pushed to a `clay-wip` branch. Pushing to `main` deploys to Fly,
+  so that only happens when I say so.
