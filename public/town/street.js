@@ -390,8 +390,9 @@ export async function createStreet(container, { season = "spring", lang = "zh", 
       camera.position.copy(TARGET).addScaledVector(off, dist);
       camera.lookAt(TARGET); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
       const top = 0.9 - 2 * Math.min(padTop(), rc.height * 0.4) / rc.height;
-      const xMin = left > 0 ? -1 + 2 * (left + 24) / rc.width : -0.92;
-      const ok = pts.every((p) => { const q = p.clone().project(camera); return q.x > xMin && q.x < 0.94 && q.y < top && q.y > -0.9; });
+      // the town may tuck under the copy column; only its left edge has to clear about a quarter of the width
+      const xMin = left > 0 ? -1 + 2 * Math.min(left + 24, rc.width * 0.27) / rc.width : -0.92;
+      const ok = pts.every((p) => { const q = p.clone().project(camera); return q.x > xMin && q.x < 0.97 && q.y < top && q.y > -0.95; });
       if (ok) break;
       dist *= 1.04;
     }

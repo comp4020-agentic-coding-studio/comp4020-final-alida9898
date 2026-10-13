@@ -91,7 +91,8 @@ function streetShops() {
 const street = await createStreet($("street"), {
   season, lang, shops: streetShops(),
   // keep the shops clear of the invite / guest card along the top
-  padTop: () => Math.max(...["invite-card", "guest-card", "board"].map((id) => { const el = $(id); return el.hidden ? 0 : el.offsetTop + el.offsetHeight; })),
+  padLeft: () => innerWidth / innerHeight >= 1.2 ? Math.max(...["invite-card", "guest-card"].map((id) => { const el = $(id); return el.hidden ? 0 : el.getBoundingClientRect().right; })) : 0,
+  padTop: () => innerWidth / innerHeight >= 1.2 ? 0 : Math.max(...["invite-card", "guest-card", "board"].map((id) => { const el = $(id); return el.hidden ? 0 : el.offsetTop + el.offsetHeight; })),
   onPick: (type) => { if (!failure && world && token) location.href = shopHref(type); },
 });
 
