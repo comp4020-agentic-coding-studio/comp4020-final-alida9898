@@ -528,8 +528,9 @@ function frame(v, zoomOut = 1, at = path.indexOf(v)) {
     const flip = fromLeft(v, c) ? -1 : 1;
     for (const [ei, del] of best ? [] : EL_STEPS.entries()) {
       for (const [ai, daz] of AZ_STEPS.entries()) {
-        // a top surface is looked down on from the front, so its things are seen from above, not edge-on
-        const az = THREE.MathUtils.clamp(az0 + flip * daz, deg(-80), deg(80)), el = (top ? deg(40) : el0) + del;
+        // a top surface is seen at eye level raised to just above the tabletop: a shallow angle, so its
+        // things stand up as they would to someone at the counter, not seen from above
+        const az = THREE.MathUtils.clamp(az0 + flip * daz, deg(-80), deg(80)), el = (top ? deg(12) : el0) + del;
         const dir = dirFrom(az, el);
         const d = Math.min(fitDistance(v, box, dir), parentD);
         const p = c.clone().addScaledVector(dir, d);
