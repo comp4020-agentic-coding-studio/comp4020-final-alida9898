@@ -17,19 +17,22 @@
   </head>
   <body class="house play">
     <header class="bar">
-      <span class="bar-route">
-        <button id="lang-toggle" class="lang-toggle bar-toggle" type="button" aria-label="Switch language">EN</button>
-        <a href="/" class="brand" id="brand">小镇一角</a>
-        <button id="back" class="back-btn" type="button" hidden><span class="wide"></span><span class="narrow"></span></button>
-        <nav id="crumbs" class="crumbs" aria-label="breadcrumb"></nav>
-      </span>
+      <a href="/" class="brand" id="brand">小镇一角</a>
       <span class="bar-tools">
+        <button id="menu-btn" class="tool menu-btn" type="button" aria-expanded="false" aria-controls="bar-menu" aria-label="Menu"><span class="tool-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7.5h14M5 12h14M5 16.5h14"/></svg></span></button>
         <span id="note-chip" class="note-chip small" hidden></span>
         <span id="quota" class="quota small" aria-live="polite" hidden><span class="wide"></span><span class="narrow"></span></span>
-        <button id="who" class="tool" type="button" hidden><span class="tool-ico"></span><span class="tool-label"></span></button>
-        <button id="friends" type="button" hidden></button>
-        <button id="mute" class="tool" type="button" aria-pressed="false"><span class="tool-ico">🔈</span><span class="tool-label"></span></button>
-        <button id="help" class="tool" type="button"><span class="tool-ico">?</span><span class="tool-label"></span></button>
+        <span id="bar-menu" class="bar-menu">
+          <button id="who" class="tool" type="button" hidden><span class="tool-ico"></span><span class="tool-label"></span></button>
+          <button id="friends" type="button" hidden></button>
+          <button id="mute" class="tool" type="button" aria-pressed="false"><span class="tool-ico">🔈</span><span class="tool-label"></span></button>
+          <button id="help" class="tool" type="button"><span class="tool-ico">?</span><span class="tool-label"></span></button>
+          <button id="lang-toggle" class="lang-toggle bar-toggle tool" type="button" aria-label="Switch language"><span class="tool-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v2.3M2.6 5.4h8.8M4.4 7.6c1 2.9 3.4 5 6.6 6.2M9.6 7.6c-1 2.9-3.4 5-6.9 6.2M12.6 21l4-10 4 10M14 17.6h5.2"/></svg></span><span class="tool-label">EN</span></button>
+        </span>
+      </span>
+      <span class="bar-route">
+        <button id="back" class="back-btn" type="button" hidden><span class="wide"></span><span class="narrow"></span></button>
+        <nav id="crumbs" class="crumbs" aria-label="breadcrumb"></nav>
       </span>
     </header>
     <main class="stage">

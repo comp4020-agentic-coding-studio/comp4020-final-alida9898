@@ -27,7 +27,7 @@ function applyLang() {
   $("v-left").textContent = t.left;
   $("v-right").textContent = t.right;
   $("v-corner").textContent = t.corner;
-  $("lang-toggle").textContent = t.toggle;
+  $("lang-toggle").querySelector(".tool-label").textContent = t.toggle;
 }
 applyLang();
 $("back").href = `/s/${token}`;

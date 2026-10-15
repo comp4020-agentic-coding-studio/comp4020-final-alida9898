@@ -37,13 +37,10 @@ body {
 a { color: var(--ink); }
 .small { font-size: 0.85rem; color: var(--ink-soft); }
 
-.lang-toggle {
-  position: fixed; top: 14px; left: 14px; z-index: 10;
-  font: inherit; font-size: 0.8rem; color: var(--ink); background: var(--card);
-  border: 2px dashed var(--stitch); border-radius: 999px; padding: 0.35em 0.9em; cursor: pointer;
-}
-.lang-toggle:hover { background: var(--paper-2); }
+/* the language switch looks like the other round tools (.tool, below); alone on the front page it floats in a corner */
+.lang-toggle { position: fixed; top: 14px; left: 14px; z-index: 10; }
 .bar-toggle { position: static; flex: 0 0 auto; }
+.bar:has(> .lang-toggle) { align-items: center; }
 
 .landing main { max-width: 34rem; margin: 0 auto; padding: 18vh 16px 4rem; text-align: center; }
 .kicker { letter-spacing: 0.3em; color: var(--ink-soft); font-size: 0.85rem; }
@@ -74,12 +71,14 @@ h1 { font-size: clamp(2.4rem, 8vw, 3.6rem); margin: 0.2em 0 0.4em; letter-spacin
 .bar { display: flex; gap: 1rem; align-items: baseline; padding: 12px 16px; flex-wrap: wrap; }
 .brand { font-weight: bold; text-decoration: none; letter-spacing: 0.1em; }
 
-/* the header on the town and shop pages: where you are on the left, round tools on the right */
-.bar:has(.bar-route) { position: relative; align-items: center; flex-wrap: nowrap; gap: 0.7rem; }
-.bar-route { display: flex; align-items: center; gap: 0.7rem; flex: 1 1 auto; min-width: 0; }
-.bar-route .brand { white-space: nowrap; }
+/* the header on the town and shop pages: the title, then the round tools, and where you are on the right */
+.bar:has(.bar-route) { position: relative; align-items: center; flex-wrap: nowrap; gap: 0.9rem; }
+.bar:has(.bar-route) .brand { white-space: nowrap; flex: 0 0 auto; }
 /* the tools keep their size; the route (back button, breadcrumb, town name) is what gives way */
-.bar-tools { display: flex; align-items: center; gap: 0.6rem; flex: 0 0 auto; margin-left: auto; }
+.bar-route { display: flex; align-items: center; justify-content: flex-end; gap: 0.7rem; flex: 0 1 auto; min-width: 0; margin-left: auto; }
+.bar-tools { position: relative; display: flex; align-items: center; gap: 0.6rem; flex: 0 0 auto; }
+.bar-menu { display: flex; align-items: center; gap: 0.6rem; }
+.tool.menu-btn { display: none; }
 .tool {
   font: inherit; color: var(--ink-soft); background: none; border: 0; padding: 0; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 0 0 auto; max-width: 6.5em;
@@ -103,7 +102,7 @@ h1 { font-size: clamp(2.4rem, 8vw, 3.6rem); margin: 0.2em 0 0.4em; letter-spacin
 .narrow { display: none; }
 /* the small card under the friends button */
 .invite-pop {
-  position: absolute; z-index: 25; right: 12px; top: calc(100% + 2px); width: min(19rem, calc(100vw - 24px)); box-sizing: border-box;
+  position: absolute; z-index: 25; left: 0; top: calc(100% + 8px); width: min(19rem, calc(100vw - 24px)); box-sizing: border-box;
   background: var(--card); border: 2px dashed var(--stitch); border-radius: 16px; padding: 10px 14px 12px;
   box-shadow: 0 6px 22px rgba(74, 46, 31, 0.16);
 }
@@ -130,6 +129,17 @@ h1 { font-size: clamp(2.4rem, 8vw, 3.6rem); margin: 0.2em 0 0.4em; letter-spacin
   .bar-tools { gap: 0.4rem; }
   .tool-label { display: none; }
   .tool-ico { width: 2rem; height: 2rem; }
+  /* the buttons fold into ☰: a small list hanging under the bar (barmenu.js), each row an icon and its words */
+  .tool.menu-btn { display: flex; justify-content: center; min-width: 44px; min-height: 44px; margin: -6px; }
+  .bar-menu {
+    display: none; position: absolute; z-index: 26; left: 0; top: calc(100% + 8px); flex-direction: column; align-items: stretch; gap: 0;
+    min-width: 10.5rem; max-width: calc(100vw - 24px); box-sizing: border-box; padding: 6px;
+    background: var(--card); border: 2px dashed var(--stitch); border-radius: 16px; box-shadow: 0 6px 22px rgba(74, 46, 31, 0.16);
+  }
+  .bar-menu.open { display: flex; }
+  .bar-menu .tool { flex-direction: row; gap: 0.7rem; min-height: 44px; max-width: none; padding: 4px 12px 4px 6px; border-radius: 10px; text-align: left; }
+  .bar-menu .tool:hover { background: var(--paper-2); }
+  .bar-menu .tool-label { display: block; font-size: 0.92rem; color: var(--ink); }
   .wide { display: none; }
   .narrow { display: inline; }
 }
@@ -139,6 +149,7 @@ h1 { font-size: clamp(2.4rem, 8vw, 3.6rem); margin: 0.2em 0 0.4em; letter-spacin
   .bar-route { gap: 0.4rem; }
   .bar-tools { gap: 0.3rem; }
   .tool-ico { width: 1.8rem; height: 1.8rem; }
+  .menu-btn { margin: -8px; }
 }
 #where { color: var(--ink-soft); flex: 1; }
 #progress { font-variant-numeric: tabular-nums; }

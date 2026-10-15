@@ -41,7 +41,7 @@
     </style>
   </head>
   <body class="front">
-    <button id="lang-toggle" class="lang-toggle" type="button" aria-label="Switch language">EN</button>
+    <button id="lang-toggle" class="lang-toggle tool" type="button" aria-label="Switch language"><span class="tool-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v2.3M2.6 5.4h8.8M4.4 7.6c1 2.9 3.4 5 6.6 6.2M9.6 7.6c-1 2.9-3.4 5-6.9 6.2M12.6 21l4-10 4 10M14 17.6h5.2"/></svg></span><span class="tool-label">EN</span></button>
     <section class="copy">
       <p class="kicker" id="kicker">A Corner of Town</p>
       <h1 id="h1">小镇一角</h1>
@@ -148,7 +148,7 @@
         $("town-error").textContent = t.error;
         $("older").textContent = t.older;
         $("about-link").textContent = t.about;
-        $("lang-toggle").textContent = t.toggle;
+        $("lang-toggle").querySelector(".tool-label").textContent = t.toggle;
         street?.setShops(shops());
         street?.setLang(lang);
       }

@@ -13,6 +13,7 @@ import { currentSeason, SEASON_NAME, SEEN_KEY } from "./shops/season.js";
 import { createWeather } from "./shops/weather.js";
 import { createIdentityCard, enteredThisVisit, whoLabel } from "./identity.js";
 import { createInvite } from "./invite.js";
+import { createBarMenu } from "./barmenu.js";
 
 const $ = (id) => document.getElementById(id);
 const debug = new URLSearchParams(location.search).has("debug");
@@ -28,7 +29,7 @@ const LAYER = {
 };
 const TEXT = {
   zh: {
-    brand: "小镇一角", toggle: "EN", toggleAria: "切换到英文", crumbsAria: "当前位置", cafe: "咖啡馆", back: "‹ 返回", loading: "正在把咖啡馆捏出来……",
+    brand: "小镇一角", toggle: "EN", toggleAria: "切换到英文", menu: "菜单", crumbsAria: "当前位置", cafe: "咖啡馆", back: "‹ 返回", loading: "正在把咖啡馆捏出来……",
     hintBuilding: "点一层楼，走近一点。", hintStorey: "点一块地方，走近一点。",
     hintZone: "把东西拖到淡淡发光的轮廓上，放手就好。同一层里先放哪个都行。",
     hintEmpty: "这里暂时没有要放的东西。",
@@ -61,7 +62,7 @@ const TEXT = {
     shareText: (n, l) => n ? `${n} 请你来帮忙摆小镇：${l}` : `来帮我摆小镇吧：${l}`,
   },
   en: {
-    brand: "A Corner of Town", toggle: "中文", toggleAria: "Switch to Chinese", crumbsAria: "Where you are", cafe: "Café", back: "‹ Back", loading: "Shaping the café out of clay…",
+    brand: "A Corner of Town", toggle: "中文", toggleAria: "Switch to Chinese", menu: "Menu", crumbsAria: "Where you are", cafe: "Café", back: "‹ Back", loading: "Shaping the café out of clay…",
     hintBuilding: "Tap a floor to step closer.", hintStorey: "Tap an area to step closer.",
     hintZone: "Drag each thing onto its faint glowing outline and let go. Within a layer, any order is fine.",
     hintEmpty: "Nothing to place here for now.",
@@ -1235,8 +1236,9 @@ function renderUI() {
   document.documentElement.lang = lang === "en" ? "en" : "zh";
   document.title = t.pageTitle;
   $("brand").textContent = t.brand;
-  $("lang-toggle").textContent = t.toggle;
-  $("lang-toggle").ariaLabel = t.toggleAria;
+  $("lang-toggle").querySelector(".tool-label").textContent = t.toggle;
+  $("lang-toggle").title = $("lang-toggle").ariaLabel = t.toggleAria;
+  $("menu-btn").title = $("menu-btn").ariaLabel = t.menu;
   $("crumbs").ariaLabel = t.crumbsAria;
   // wide screens: "‹ Back" beside the breadcrumb. Phones: no breadcrumb, so the button names
   // where it goes ("‹ Counter"), and from the shop's top view it leads back to the town.
@@ -1598,6 +1600,8 @@ const invite = createInvite($("friends"), {
   },
   shareText: () => (worldShop ? T().shareText(ownerName, link) : link),
 });
+// phones fold the header buttons into one ☰ list (barmenu.js). Made after the invite, so Esc folds the invite card first
+createBarMenu($("menu-btn"), $("bar-menu"), ["who", "help"]);
 function renderPresence() { invite.render(); }
 addEventListener("pagehide", () => { if (drag) net.hold(drag.it.id, false); net.close(); });
 

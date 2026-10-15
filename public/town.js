@@ -4,11 +4,12 @@
 import { createStreet } from "./town/street.js";
 import { createIdentityCard, whoLabel } from "./identity.js";
 import { createInvite } from "./invite.js";
+import { createBarMenu } from "./barmenu.js";
 import { SEASONS, SEASON_NAME, SEEN_KEY, currentSeason } from "./shops/season.js";
 
 const TEXT = {
   zh: {
-    brand: "小镇一角", toggle: "EN", toggleAria: "切换到英文", pageTitle: "小镇一角 · 我的小镇",
+    brand: "小镇一角", toggle: "EN", toggleAria: "切换到英文", menu: "菜单", pageTitle: "小镇一角 · 我的小镇",
     loading: "正在把小镇捏出来……",
     owner: "这是你的小镇", guestTitle: "你在帮朋友拼小镇",
     leftToday: (n) => `今天还能帮 ${n} 件`, townsDone: "今天已经帮了 3 个小镇啦，明天再来",
@@ -29,7 +30,7 @@ const TEXT = {
     shareText: (n, l) => n ? `${n} 请你来帮忙摆小镇：${l}` : `来帮我摆小镇吧：${l}`,
   },
   en: {
-    brand: "A Corner of Town", toggle: "中文", toggleAria: "Switch to Chinese", pageTitle: "A Corner of Town · My town",
+    brand: "A Corner of Town", toggle: "中文", toggleAria: "Switch to Chinese", menu: "Menu", pageTitle: "A Corner of Town · My town",
     loading: "Shaping the town out of clay…",
     owner: "This is your town", guestTitle: "You're helping a friend's town",
     leftToday: (n) => `${n} left today`, townsDone: "You've helped 3 towns today — come back tomorrow",
@@ -113,13 +114,16 @@ const invite = createInvite($("friends"), {
   words: () => { const t = T(); return { label: t.inviteShort, title: t.invite, note: t.inviteNote, copy: t.copy, copied: t.copied, share: t.share }; },
   shareText: () => T().shareText(ownerName, inviteLink),
 });
+// phones fold the header buttons into one ☰ list (barmenu.js). Made after the invite, so Esc folds the invite card first
+createBarMenu($("menu-btn"), $("bar-menu"), ["who", "help"]);
 function render() {
   const t = T();
   document.documentElement.lang = lang;
   document.title = t.pageTitle;
   $("brand").textContent = t.brand;
-  $("lang-toggle").textContent = t.toggle;
-  $("lang-toggle").ariaLabel = t.toggleAria;
+  $("lang-toggle").querySelector(".tool-label").textContent = t.toggle;
+  $("lang-toggle").title = $("lang-toggle").ariaLabel = t.toggleAria;
+  $("menu-btn").title = $("menu-btn").ariaLabel = t.menu;
   document.querySelector(".tstage").classList.toggle("failed", !!failure);
   const st = $("status");
   st.replaceChildren();

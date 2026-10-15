@@ -55,7 +55,7 @@ function applyStaticLang() {
   $("invite-line").textContent = t.inviteLine;
   $("copy-invite").textContent = t.copy;
   $("footer-caption").textContent = t.footer;
-  $("lang-toggle").textContent = t.toggle;
+  $("lang-toggle").querySelector(".tool-label").textContent = t.toggle;
 }
 applyStaticLang();
 $("lang-toggle").addEventListener("click", () => {

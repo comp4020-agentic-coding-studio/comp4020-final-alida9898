@@ -30,7 +30,7 @@ function applyLang() {
   document.documentElement.lang = lang === "en" ? "en" : "zh";
   $("brand").textContent = t.brand;
   $("place").textContent = t.place;
-  $("lang-toggle").textContent = t.toggle;
+  $("lang-toggle").querySelector(".tool-label").textContent = t.toggle;
   for (const b of document.querySelectorAll(".views button")) b.textContent = t.views[b.dataset.view];
 }
 applyLang();
