@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import * as kit from "/clay/clay.js";
-import { build, createCatAnimator, COATS } from "/clay/models/cat.js";
+import { build, createCatAnimator, COATS, FACE } from "/clay/models/cat.js";
 
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById("view"));
@@ -32,11 +32,14 @@ const SEAT_Y = 44;
 // A little cup on the floor to look at.
 const cup = kit.roundedCylinder(5, 9, 1.5, "terracotta"); cup.position.set(-30, 0, 45); scene.add(cup);
 
-let cat, anim, curPose = "loaf";
+let cat, anim, curPose = "loaf", curCoat = "tabby";
+// ?editor: face numbers tuned with sliders (start from the last export if there is one)
+const face = { ...FACE };
 function makeCat(coat) {
   const old = anim;
   if (cat) scene.remove(cat);
-  cat = build(kit, { coat });
+  curCoat = coat;
+  cat = build(kit, { coat, face });
   cat.position.y = SEAT_Y;
   scene.add(cat);
   anim = createCatAnimator(cat, { reduced, speed: old?.speed ?? 1, amplitude: old?.amplitude ?? 1, idle: old?.idle ?? true });
@@ -47,7 +50,7 @@ makeCat("tabby");
 const target = new THREE.Vector3();
 const MOTIONS = [
   ["breathe", "呼吸", "Breathe"], ["flick", "甩尾巴", "Tail flick"], ["ear", "抖耳朵", "Ear twitch"],
-  ["blink", "眨眼", "Blink"], ["squint", "眯眼", "Slow squint"], ["stretch", "伸懒腰", "Stretch"],
+  ["blink", "眨眼", "Blink"], ["squint", "眯眼", "Slow squint"], ["smile", "笑眯眯", "Smile"], ["stretch", "伸懒腰", "Stretch"],
   ["lookUp", "抬头看", "Look up"], ["jump", "跳上来", "Jump up"],
 ];
 const mBox = document.getElementById("motions");
@@ -121,5 +124,45 @@ renderer.setAnimationLoop(() => {
   controls.update();
   renderer.render(scene, camera);
 });
+// ---- ?editor: sliders for the head and eyes, Export writes assets/editor/cat.json ----
+if (new URLSearchParams(location.search).has("editor")) {
+  try { const r = await fetch("/api/editor/cat"); if (r.ok) Object.assign(face, (await r.json()).face || {}); } catch {}
+  makeCat(curCoat);
+  const SL = [
+    ["headW", "头宽 Head width", 3.5, 6.5], ["headH", "头高 Head height", 3, 6], ["headD", "头前后 Head depth", 3.5, 6],
+    ["headY", "头上下 Head up/down", 19.5, 23], ["headX", "头前后位置 Head fwd/back", 11.5, 14.5],
+    ["eyeY", "眼睛高低 Eye height", 19.5, 24], ["eyeSpread", "两眼距离 Eye spacing", 0.25, 0.9], ["eyeSize", "眼睛大小 Eye size", 1.1, 2.6],
+    ["eyeSink", "眼睛凸出 Eye bulge", 0, 1.2], ["noseY", "鼻子高低 Nose height", -2, 1],
+    ["earSpread", "两耳距离 Ear spacing", 1.2, 3.5], ["earUp", "耳朵高低 Ear height", 2.5, 5],
+  ];
+  const panel = document.createElement("div");
+  panel.style.cssText = "position:fixed;top:10px;left:10px;z-index:10;background:var(--paper);border:1.5px solid var(--stitch);border-radius:12px;padding:10px 12px;font-size:13px;max-height:calc(100vh - 20px);overflow:auto;width:260px";
+  panel.innerHTML = "<b>编辑模式 · 猫的脸</b><br><span class=small>拖滑块调整，Export 存到 assets/editor/cat.json</span>";
+  let timer = 0;
+  for (const [k, label, lo, hi] of SL) {
+    const row = document.createElement("label");
+    row.style.cssText = "display:block;margin-top:6px";
+    const out = document.createElement("span"); out.textContent = ` ${face[k]}`;
+    const inp = Object.assign(document.createElement("input"), { type: "range", min: lo, max: hi, step: 0.05, value: face[k] });
+    inp.style.width = "100%";
+    // rebuilding the cat (meshing the clay) takes a moment, so wait until the slider rests
+    inp.addEventListener("input", () => { face[k] = Number(inp.value); out.textContent = ` ${face[k]}`; clearTimeout(timer); timer = setTimeout(() => makeCat(curCoat), 120); });
+    row.append(label, out, inp); panel.append(row);
+  }
+  const btns = document.createElement("div"); btns.style.marginTop = "10px";
+  const reset = Object.assign(document.createElement("button"), { type: "button", textContent: "还原 Reset" });
+  reset.addEventListener("click", () => { Object.assign(face, FACE); for (const i of panel.querySelectorAll("input")) { const k = SL[[...panel.querySelectorAll("input")].indexOf(i)][0]; i.value = face[k]; i.previousSibling.textContent = ` ${face[k]}`; } makeCat(curCoat); });
+  const exp = Object.assign(document.createElement("button"), { type: "button", textContent: "Export" });
+  const msg = document.createElement("div"); msg.className = "small"; msg.style.marginTop = "6px";
+  exp.addEventListener("click", async () => {
+    try {
+      const r = await fetch("/api/editor/cat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ face }) });
+      msg.textContent = r.ok ? "已保存到 assets/editor/cat.json" : `保存失败（${r.status}）`;
+    } catch { msg.textContent = "保存失败"; }
+  });
+  btns.append(reset, " ", exp); panel.append(btns, msg);
+  document.body.append(panel);
+}
+
 // for verification from the console
-Object.assign(window, { __cat: { get anim() { return anim; }, get cat() { return cat; } } });
+Object.assign(window, { __cat: { get anim() { return anim; }, get cat() { return cat; }, camera, controls } });
