@@ -3,85 +3,154 @@ import { currentSeason, seasonOf } from "../server/season.ts";
 
 const baseUrl = inject("baseUrl");
 const api = (path: string, init?: RequestInit) => fetch(new URL(path, baseUrl), init);
-const post = (path: string, body?: unknown) =>
-  api(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) });
-const newWorld = async () => (await (await post("/api/worlds")).json()) as {
-  world: string; owner: string; guest: string; shops: Record<string, string>;
-};
-const uid = () => `h-${Math.random().toString(36).slice(2, 12)}`;
+const post = (path: string, body?: unknown, init?: RequestInit) =>
+  api(path, { ...init, method: "POST", headers: { "content-type": "application/json", ...(init?.headers ?? {}) }, body: JSON.stringify(body ?? {}) });
+
+const uid = () => `u${Math.random().toString(36).slice(2, 10)}`;
+const PASSWORD = "correct-horse-battery";
+
+/** Registers a fresh account and returns its session cookie + id. */
+async function register(username = uid()): Promise<{ username: string; id: string; cookie: string }> {
+  const res = await post("/api/auth/register", { username, password: PASSWORD });
+  expect(res.status, `register(${username}) failed`).toBe(200);
+  const cookie = (res.headers.get("set-cookie") ?? "").split(";")[0];
+  const { account } = await res.json();
+  return { username, id: account.id, cookie };
+}
+const authed = (cookie: string) => (path: string, init?: RequestInit) =>
+  api(path, { ...init, headers: { ...(init?.headers ?? {}), cookie } });
+const authedPost = (cookie: string) => (path: string, body?: unknown) =>
+  post(path, body, { headers: { cookie } });
+
+/** A fresh account with its own town (created on first POST /api/worlds). */
+async function newWorld() {
+  const owner = await register();
+  const res = await authedPost(owner.cookie)("/api/worlds");
+  const { world, shops } = (await res.json()) as { world: string; shops: Record<string, string> };
+  return { owner, world, shops };
+}
+/** Makes `a` and `b` mutual friends (a sends, b accepts). */
+async function makeFriends(a: { cookie: string; id: string }, b: { cookie: string; id: string; username: string }) {
+  const sent = await authedPost(a.cookie)("/api/friends/request", { username: b.username });
+  expect(sent.status).toBe(200);
+  const acc = await authedPost(b.cookie)(`/api/friends/${a.id}/accept`);
+  expect(acc.status).toBe(200);
+}
 
 it("a new world has its own cafe, flower, book and bakery shop", async () => {
   const w = await newWorld();
   expect(Object.keys(w.shops).sort()).toEqual(["bakery", "book", "cafe", "flower"]);
-  expect(w.owner).not.toBe(w.guest);
-  const res = await api(`/api/worlds/${w.world}?t=${w.owner}`);
+  const res = await authed(w.owner.cookie)(`/api/worlds/${w.world}`);
   const body = await res.json();
   expect(body.role).toBe("owner");
-  expect(body.guestToken).toBe(w.guest);
   expect(body.shops.map((s: { type: string }) => s.type)).toEqual(["cafe", "flower", "book", "bakery"]);
   expect(body.quota).toBeUndefined();
-  expect((await api(`/w/${w.world}/cafe`)).status).toBe(200);
+  expect((await authed(w.owner.cookie)(`/w/${w.world}/cafe`)).status).toBe(200);
+});
+
+it("POST /api/worlds is idempotent: the same account always gets the same town", async () => {
+  const owner = await register();
+  const a = await (await authedPost(owner.cookie)("/api/worlds")).json();
+  const b = await (await authedPost(owner.cookie)("/api/worlds")).json();
+  expect(a.world).toBe(b.world);
 });
 
 it("the owner places without a limit", async () => {
   const w = await newWorld();
   for (let i = 0; i < 10; i++) {
-    const r = await post(`/api/shops/${w.shops.cafe}/place`, { item: `item-${i}`, client: "me", t: w.owner });
+    const r = await authedPost(w.owner.cookie)(`/api/shops/${w.shops.cafe}/place`, { item: `item-${i}`, client: "me" });
     expect(r.status).toBe(200);
   }
-  const cafe = (await (await api(`/api/worlds/${w.world}?t=${w.owner}`)).json()).shops[0];
+  const cafe = (await (await authed(w.owner.cookie)(`/api/worlds/${w.world}`)).json()).shops[0];
   expect(cafe.placed).toBe(10);
 });
 
-it("a guest places 8 items a day per world; the 9th is a 429", async () => {
+it("a friend places 8 items a day per world; the 9th is a 429", async () => {
   const w = await newWorld();
-  const helper = uid();
+  const friend = await register();
+  await makeFriends(w.owner, friend);
   for (let i = 0; i < 8; i++) {
-    const r = await post(`/api/shops/${w.shops.flower}/place`, { item: `f-${i}`, client: helper, t: w.guest, helper });
+    const r = await authedPost(friend.cookie)(`/api/shops/${w.shops.flower}/place`, { item: `f-${i}`, client: friend.id });
     expect(r.status).toBe(200);
     expect((await r.json()).quota.left).toBe(7 - i);
   }
-  const ninth = await post(`/api/shops/${w.shops.book}/place`, { item: "b-0", client: helper, t: w.guest, helper });
+  const ninth = await authedPost(friend.cookie)(`/api/shops/${w.shops.book}/place`, { item: "b-0", client: friend.id });
   expect(ninth.status).toBe(429);
   expect((await ninth.json()).error).toBe("quota_today");
-  const view = await (await api(`/api/worlds/${w.world}?t=${w.guest}&helper=${helper}`)).json();
+  const view = await (await authed(friend.cookie)(`/api/worlds/${w.world}`)).json();
   expect(view.role).toBe("guest");
-  expect(view.guestToken).toBeUndefined();
+  expect(view.canPlace).toBe(true);
   expect(view.quota).toEqual({ left: 0, worldsLeft: 2 });
 });
 
-it("a taken item doesn't use up a guest's quota", async () => {
+it("a taken item doesn't use up a friend's quota", async () => {
   const w = await newWorld();
-  const helper = uid();
-  await post(`/api/shops/${w.shops.cafe}/place`, { item: "l0-lamp", client: "me", t: w.owner });
-  const r = await post(`/api/shops/${w.shops.cafe}/place`, { item: "l0-lamp", client: helper, t: w.guest, helper });
+  const friend = await register();
+  await makeFriends(w.owner, friend);
+  await authedPost(w.owner.cookie)(`/api/shops/${w.shops.cafe}/place`, { item: "l0-lamp", client: "me" });
+  const r = await authedPost(friend.cookie)(`/api/shops/${w.shops.cafe}/place`, { item: "l0-lamp", client: friend.id });
   expect(r.status).toBe(409);
-  const view = await (await api(`/api/worlds/${w.world}?t=${w.guest}&helper=${helper}`)).json();
+  const view = await (await authed(friend.cookie)(`/api/worlds/${w.world}`)).json();
   expect(view.quota).toEqual({ left: 8, worldsLeft: 3 });
 });
 
-it("a guest helps at most 3 worlds a day", async () => {
-  const helper = uid();
+it("a friend helps at most 3 worlds a day", async () => {
+  const friend = await register();
   for (let i = 0; i < 3; i++) {
     const w = await newWorld();
-    expect((await post(`/api/shops/${w.shops.cafe}/place`, { item: "x", client: helper, t: w.guest, helper })).status).toBe(200);
+    await makeFriends(w.owner, friend);
+    expect((await authedPost(friend.cookie)(`/api/shops/${w.shops.cafe}/place`, { item: "x", client: friend.id })).status).toBe(200);
   }
   const fourth = await newWorld();
-  const view = await (await api(`/api/worlds/${fourth.world}?t=${fourth.guest}&helper=${helper}`)).json();
+  await makeFriends(fourth.owner, friend);
+  const view = await (await authed(friend.cookie)(`/api/worlds/${fourth.world}`)).json();
   expect(view.quota).toEqual({ left: 0, worldsLeft: 0 });
-  const r = await post(`/api/shops/${fourth.shops.cafe}/place`, { item: "x", client: helper, t: fourth.guest, helper });
+  const r = await authedPost(friend.cookie)(`/api/shops/${fourth.shops.cafe}/place`, { item: "x", client: friend.id });
   expect(r.status).toBe(429);
   expect((await r.json()).error).toBe("too_many_worlds");
 });
 
-it("a wrong or missing token is a 403; an unknown world is a 404", async () => {
+it("reusing the same account never resets a spent quota (no client-chosen id to clear)", async () => {
   const w = await newWorld();
-  expect((await api(`/api/worlds/${w.world}?t=nope`)).status).toBe(403);
-  expect((await api(`/api/worlds/${w.world}`)).status).toBe(403);
+  const friend = await register();
+  await makeFriends(w.owner, friend);
+  for (let i = 0; i < 8; i++) {
+    expect((await authedPost(friend.cookie)(`/api/shops/${w.shops.flower}/place`, { item: `g-${i}`, client: friend.id })).status).toBe(200);
+  }
+  // "clearing localStorage" used to mean a fresh helper string; now the account id is server-side
+  // and can't be chosen by the client at all, so a second "fresh" request with the same session
+  // (simulating the old reset trick) still sees the spent quota.
+  const again = await authedPost(friend.cookie)(`/api/shops/${w.shops.flower}/place`, { item: "g-8", client: friend.id });
+  expect(again.status).toBe(429);
+});
+
+it("anyone logged in may view a town, but only an accepted friend (or the owner) may place", async () => {
+  const w = await newWorld();
+  const stranger = await register();
+  const viewRes = await authed(stranger.cookie)(`/api/worlds/${w.world}`);
+  expect(viewRes.status).toBe(200);
+  const view = await viewRes.json();
+  expect(view.role).toBe("guest");
+  expect(view.canPlace).toBe(false);
+  expect(view.quota).toBeUndefined();
+  const placeRes = await authedPost(stranger.cookie)(`/api/shops/${w.shops.cafe}/place`, { item: "x", client: stranger.id });
+  expect(placeRes.status).toBe(403);
+});
+
+it("no session is 401 for viewing; an unknown world is a 404; a non-owner can't rename or set the note", async () => {
+  const w = await newWorld();
+  expect((await api(`/api/worlds/${w.world}`)).status).toBe(401);
   expect((await post(`/api/shops/${w.shops.cafe}/place`, { item: "x", client: "a" })).status).toBe(403);
-  expect((await post(`/api/shops/${w.shops.cafe}/place`, { item: "x", client: "a", t: "nope" })).status).toBe(403);
-  expect((await api("/api/worlds/no-such-world?t=x")).status).toBe(404);
+  expect((await api("/api/worlds/no-such-world")).status).toBe(404);
+  expect((await authed(w.owner.cookie)("/api/worlds/no-such-world")).status).toBe(404);
   expect((await api("/w/no-such-world")).status).toBe(404);
+  const stranger = await register();
+  const put = await api(`/api/worlds/${w.world}/name`, {
+    method: "PUT",
+    headers: { "content-type": "application/json", cookie: stranger.cookie },
+    body: JSON.stringify({ name: "x" }),
+  });
+  expect(put.status).toBe(403);
 });
 
 it("legacy shops without a world keep the open rules", async () => {

@@ -107,6 +107,178 @@ export function place(token: string, stickerId: string): string[] | undefined {
   return placed;
 }
 
+// ---- accounts, sessions, friends, events (crit 10: real accounts replace token links) ----
+db.exec(`
+  CREATE TABLE IF NOT EXISTS accounts (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
+  );
+  CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    account_id TEXT NOT NULL REFERENCES accounts(id),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    expires_at TEXT NOT NULL
+  );
+  -- one row per (from, to) pair; status flips to 'accepted' once "to" accepts.
+  -- friendship is symmetric: isFriend checks both directions for 'accepted'.
+  CREATE TABLE IF NOT EXISTS friend_requests (
+    from_account TEXT NOT NULL REFERENCES accounts(id),
+    to_account TEXT NOT NULL REFERENCES accounts(id),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted')),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    PRIMARY KEY (from_account, to_account)
+  );
+  -- persistent log: survives past what console.log/flyctl logs can show.
+  CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    account_id TEXT,
+    world TEXT,
+    action TEXT NOT NULL,
+    result TEXT NOT NULL,
+    detail TEXT
+  );
+`);
+
+export type Account = { id: string; username: string; password_hash: string };
+
+const USERNAME_RE = /^[a-zA-Z0-9_-]{3,24}$/;
+export const isValidUsername = (s: unknown): s is string => typeof s === "string" && USERNAME_RE.test(s);
+
+export function createAccount(username: string, passwordHash: string): Account | { error: "taken" } {
+  const acctId = id(12);
+  try {
+    db.prepare("INSERT INTO accounts (id, username, password_hash) VALUES (?, ?, ?)").run(acctId, username, passwordHash);
+  } catch {
+    return { error: "taken" };
+  }
+  return { id: acctId, username, password_hash: passwordHash };
+}
+
+export function getAccountByUsername(username: string): Account | undefined {
+  return db.prepare("SELECT id, username, password_hash FROM accounts WHERE username = ?").get(username) as Account | undefined;
+}
+
+export function getAccountById(accountId: string): Account | undefined {
+  return db.prepare("SELECT id, username, password_hash FROM accounts WHERE id = ?").get(accountId) as Account | undefined;
+}
+
+export function createSession(accountId: string, token: string, expiresAt: string) {
+  db.prepare("INSERT INTO sessions (token, account_id, expires_at) VALUES (?, ?, ?)").run(token, accountId, expiresAt);
+}
+
+// Returns the account for a still-valid session token, or undefined (missing/expired).
+export function sessionAccount(token: string): Account | undefined {
+  const row = db
+    .prepare(
+      `SELECT a.id, a.username, a.password_hash FROM sessions s JOIN accounts a ON a.id = s.account_id
+       WHERE s.token = ? AND s.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
+    )
+    .get(token) as Account | undefined;
+  return row;
+}
+
+export function deleteSession(token: string) {
+  db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
+}
+
+export type FriendStatus = "none" | "pending_out" | "pending_in" | "friends";
+
+// The relationship from `me`'s point of view looking at `other`.
+export function friendStatus(me: string, other: string): FriendStatus {
+  if (me === other) return "friends";
+  const out = db.prepare("SELECT status FROM friend_requests WHERE from_account = ? AND to_account = ?").get(me, other) as
+    | { status: string }
+    | undefined;
+  if (out?.status === "accepted") return "friends";
+  const inc = db.prepare("SELECT status FROM friend_requests WHERE from_account = ? AND to_account = ?").get(other, me) as
+    | { status: string }
+    | undefined;
+  if (inc?.status === "accepted") return "friends";
+  if (out?.status === "pending") return "pending_out";
+  if (inc?.status === "pending") return "pending_in";
+  return "none";
+}
+
+export function areFriends(a: string, b: string): boolean {
+  return a === b || friendStatus(a, b) === "friends";
+}
+
+export type FriendRequestResult = { ok: true; status: FriendStatus } | { ok: false; reason: "self" | "already" };
+
+// Sending a request when the other side already sent one is treated as mutual
+// acceptance (steam/Xbox-style), rather than leaving both stuck as "pending".
+export function sendFriendRequest(from: string, to: string): FriendRequestResult {
+  if (from === to) return { ok: false, reason: "self" };
+  const status = friendStatus(from, to);
+  if (status === "friends" || status === "pending_out") return { ok: false, reason: "already" };
+  if (status === "pending_in") {
+    db.prepare("UPDATE friend_requests SET status = 'accepted' WHERE from_account = ? AND to_account = ?").run(to, from);
+    return { ok: true, status: "friends" };
+  }
+  db.prepare("INSERT INTO friend_requests (from_account, to_account, status) VALUES (?, ?, 'pending')").run(from, to);
+  return { ok: true, status: "pending_out" };
+}
+
+export function acceptFriendRequest(me: string, from: string): boolean {
+  const r = db.prepare("UPDATE friend_requests SET status = 'accepted' WHERE from_account = ? AND to_account = ? AND status = 'pending'").run(from, me);
+  return r.changes > 0;
+}
+
+// Declines a pending incoming request, or removes an existing friendship /
+// cancels an outgoing request — whichever row exists between the two.
+export function removeFriendLink(me: string, other: string) {
+  db.prepare("DELETE FROM friend_requests WHERE (from_account = ? AND to_account = ?) OR (from_account = ? AND to_account = ?)").run(
+    me,
+    other,
+    other,
+    me,
+  );
+}
+
+export function listFriends(me: string): { id: string; username: string }[] {
+  return db
+    .prepare(
+      `SELECT a.id, a.username FROM friend_requests f JOIN accounts a ON a.id = CASE WHEN f.from_account = ? THEN f.to_account ELSE f.from_account END
+       WHERE f.status = 'accepted' AND (f.from_account = ? OR f.to_account = ?)`,
+    )
+    .all(me, me, me) as { id: string; username: string }[];
+}
+
+export function listIncomingRequests(me: string): { id: string; username: string }[] {
+  return db
+    .prepare(
+      `SELECT a.id, a.username FROM friend_requests f JOIN accounts a ON a.id = f.from_account
+       WHERE f.to_account = ? AND f.status = 'pending'`,
+    )
+    .all(me) as { id: string; username: string }[];
+}
+
+export function listOutgoingRequests(me: string): { id: string; username: string }[] {
+  return db
+    .prepare(
+      `SELECT a.id, a.username FROM friend_requests f JOIN accounts a ON a.id = f.to_account
+       WHERE f.from_account = ? AND f.status = 'pending'`,
+    )
+    .all(me) as { id: string; username: string }[];
+}
+
+export type LoggedEvent = { accountId?: string | null; world?: string | null; action: string; result: string; detail?: string | null };
+
+// Second, persistent sink alongside the existing console.log() helpers in
+// shops.ts/worlds.ts — this is what survives past `flyctl logs`.
+export function logEvent(e: LoggedEvent) {
+  db.prepare("INSERT INTO events (account_id, world, action, result, detail) VALUES (?, ?, ?, ?, ?)").run(
+    e.accountId ?? null,
+    e.world ?? null,
+    e.action,
+    e.result,
+    e.detail ?? null,
+  );
+}
+
 // ---- shared shops: one café built together by everyone holding the link ----
 // shop_items' primary key makes "first drop wins" atomic: INSERT OR IGNORE.
 db.exec(`
@@ -175,14 +347,16 @@ export function openShop(candidates: string[]): { shop: string; opened: boolean 
   return { shop: createShop(), opened: true };
 }
 
-// ---- personal worlds: a town per person, with guest helpers and daily quotas ----
-// Additive only: shops gains nullable world/type columns (legacy shops keep NULL
-// and the old open rules); helps is the per-day ledger for guest quotas.
+// ---- personal worlds: a town per account, with friend helpers and daily quotas ----
+// Crit 10: owner_token/guest_token are gone. A world belongs to exactly one
+// account (owner_account); anyone logged in may view it, but only an accepted
+// friend of the owner (or the owner) may place items — see worldPermission().
+// helps now keys on the *account id* of whoever helped, not a self-reported
+// client string, so quota can't be reset by clearing localStorage.
 db.exec(`
   CREATE TABLE IF NOT EXISTS worlds (
     id TEXT PRIMARY KEY,
-    owner_token TEXT NOT NULL UNIQUE,
-    guest_token TEXT NOT NULL UNIQUE,
+    owner_account TEXT NOT NULL UNIQUE REFERENCES accounts(id),
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now'))
   );
   CREATE TABLE IF NOT EXISTS helps (
@@ -204,14 +378,14 @@ export type ShopType = (typeof SHOP_TYPES)[number];
 export const GUEST_ITEMS_PER_DAY = 8;
 export const GUEST_WORLDS_PER_DAY = 3;
 
-export type WorldRow = { id: string; owner_token: string; guest_token: string };
+export type WorldRow = { id: string; owner_account: string };
 
-export function createWorld(): { world: string; owner: string; guest: string; shops: Record<ShopType, string> } {
-  const world = id(9), owner = id(18), guest = id(18);
+export function createWorld(ownerAccount: string): { world: string; shops: Record<ShopType, string> } {
+  const world = id(9);
   const shops = {} as Record<ShopType, string>;
   db.exec("BEGIN IMMEDIATE");
   try {
-    db.prepare("INSERT INTO worlds (id, owner_token, guest_token) VALUES (?, ?, ?)").run(world, owner, guest);
+    db.prepare("INSERT INTO worlds (id, owner_account) VALUES (?, ?)").run(world, ownerAccount);
     for (const type of SHOP_TYPES) {
       shops[type] = id(9);
       db.prepare("INSERT INTO shops (id, world, type) VALUES (?, ?, ?)").run(shops[type], world, type);
@@ -221,11 +395,30 @@ export function createWorld(): { world: string; owner: string; guest: string; sh
     db.exec("ROLLBACK");
     throw e;
   }
-  return { world, owner, guest, shops };
+  return { world, shops };
 }
 
 export function getWorld(world: string): WorldRow | undefined {
-  return db.prepare("SELECT id, owner_token, guest_token FROM worlds WHERE id = ?").get(world) as WorldRow | undefined;
+  return db.prepare("SELECT id, owner_account FROM worlds WHERE id = ?").get(world) as WorldRow | undefined;
+}
+
+// One town per account: the account's existing world, or a freshly created one.
+export function getOrCreateWorldForAccount(accountId: string): { world: string; shops: Record<ShopType, string>; created: boolean } {
+  const existing = db.prepare("SELECT id FROM worlds WHERE owner_account = ?").get(accountId) as { id: string } | undefined;
+  if (existing) return { world: existing.id, shops: Object.fromEntries(worldShops(existing.id).map((s) => [s.type, s.shop])) as Record<ShopType, string>, created: false };
+  const w = createWorld(accountId);
+  return { ...w, created: true };
+}
+
+// Server-side permission: can `accountId` (possibly undefined = not logged in)
+// view, or place items in, this world? The owner can always do both; any
+// logged-in account may view; only an accepted friend of the owner may place.
+export type WorldPermission = { view: boolean; place: boolean; isOwner: boolean };
+
+export function worldPermission(world: WorldRow, accountId: string | undefined): WorldPermission {
+  if (!accountId) return { view: false, place: false, isOwner: false };
+  if (accountId === world.owner_account) return { view: true, place: true, isOwner: true };
+  return { view: true, place: areFriends(accountId, world.owner_account), isOwner: false };
 }
 
 export function worldShops(world: string): { type: string; shop: string; placed: number }[] {
@@ -366,6 +559,10 @@ db.exec(`
 `);
 
 export const NAME_MAX = 12;
+// A friend's helper display name now defaults to their real account username
+// (see USERNAME_RE above, max 24), so it needs its own, longer cap — don't
+// reuse NAME_MAX (meant for short owner/town names) here.
+export const HELPER_NAME_MAX = 24;
 
 export function ownerName(world: string): string {
   return (db.prepare("SELECT owner_name FROM worlds WHERE id = ?").get(world) as { owner_name: string } | undefined)?.owner_name ?? "";

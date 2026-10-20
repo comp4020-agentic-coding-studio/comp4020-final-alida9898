@@ -11,21 +11,28 @@ export function shopFromUrl(loc = location) {
   return q && /^[\w-]+$/.test(q) ? q : null;
 }
 
-/** `{ world, t, type }` from `/w/<world>/<type>?t=<token>`, or null. */
+/** `{ world, type }` from `/w/<world>/<type>`, or null. Crit 10: no more `?t=` — who
+ * you are comes from the session cookie (server/accounts.ts), not a URL token. */
 export function worldFromUrl(loc = location) {
   const m = loc.pathname.match(/^\/w\/([\w-]+)\/([a-z_]+)\/?$/);
-  if (!m) return null;
-  const t = new URLSearchParams(loc.search).get("t") || "";
-  return { world: m[1], type: m[2], t };
+  return m ? { world: m[1], type: m[2] } : null;
 }
 
-/** The shop id of a world's shop of that type (contract: server/SHOPS.md, worlds). Throws on trouble. */
-export async function loadWorldShop({ world, type, t }, helper) {
-  const res = await fetch(`/api/worlds/${world}?t=${encodeURIComponent(t)}&helper=${encodeURIComponent(helper)}`);
+/** The shop id of a world's shop of that type (contract: server/SHOPS.md, worlds).
+ * 401 (not logged in) is reported distinctly so callers can show a login prompt
+ * instead of "this town doesn't exist". Throws on other trouble. */
+export async function loadWorldShop({ world, type }) {
+  const res = await fetch(`/api/worlds/${world}`);
+  if (res.status === 401) { const e = new Error("login_required"); e.code = 401; throw e; }
   if (!res.ok) throw new Error(`world ${res.status}`);
   const data = await res.json();
   const s = (data.shops || []).find((x) => x.type === type);
-  return s ? { shop: s.shop, t, role: data.role, guestToken: data.guestToken || null, quota: data.quota || null, note: data.note ?? null, ownerName: data.ownerName || "", requests: s.requests || [] } : null;
+  // `ownerUsername`: the owner's account username (server/worlds.ts), used to
+  // prefill the "Add as friend" request; `ownerName` is the separate, free-text
+  // town nickname, often blank.
+  return s
+    ? { shop: s.shop, role: data.role, canPlace: data.role === "owner" || !!data.canPlace, quota: data.quota || null, note: data.note ?? null, ownerName: data.ownerName || "", ownerUsername: data.ownerUsername || "", requests: s.requests || [] }
+    : null;
 }
 
 /** A random id per tab, kept across reloads of that tab. */
@@ -57,9 +64,10 @@ export async function loadShop(shop) {
 
 /**
  * Live link to a shop. `on` = { hello, placed, hold, presence } handlers.
- * place(item) resolves "ok" | "taken" | "full" | "error" (network / server trouble).
- * `extra` is sent with every POST (a world shop's `{ t, helper }`); a 429 (daily
- * helper quota) resolves "quota" and a 403 "full", so the drop goes back.
+ * place(item) resolves "ok" | "taken" | "full" | "forbidden" | "error" (network / server
+ * trouble). `extra` is sent with every POST (a world shop's `{ helperName }`); a 429
+ * (daily helper quota) resolves "quota", and a 403 (not logged in, or not an accepted
+ * friend — server-enforced, see server/shops.ts) resolves "forbidden".
  * World shops also get `requests { requests }`, `note { note }` and `name { ownerName }`.
  * `extra` is read at each POST, so changing it (e.g. helperName) takes effect next time.
  * A guest's quota (from a 200 or a 429) is passed to `on.quota({ left, worldsLeft })`.
@@ -91,7 +99,7 @@ export function connect(shop, client, on, extra = {}) {
           on.quota?.(body.quota || { left: 0, worldsLeft: 0 });
           return "quota";
         }
-        if (res.status === 403) return "full";
+        if (res.status === 403) return "forbidden";
         if (res.status === 409) {
           const { error } = await res.json().catch(() => ({}));
           return error === "full" ? "full" : "taken";

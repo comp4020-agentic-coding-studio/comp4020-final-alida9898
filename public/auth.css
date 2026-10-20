@@ -1,0 +1,89 @@
+/* Shared look for the account system: the login/register card (index.html, town.js,
+   play.js login-gate), the account popover (accountmenu.js), and the friends page.
+   Matches identity.js's card: dashed border, --card background, no browser alert()s. */
+
+.authcard {
+  width: min(22rem, 100%); box-sizing: border-box; background: var(--card); color: var(--ink);
+  border: 2px dashed var(--stitch); border-radius: 18px; padding: 16px 18px 14px;
+  box-shadow: 0 8px 28px rgba(74, 46, 31, 0.18);
+}
+.authcard-scrim {
+  position: fixed; inset: 0; z-index: 60; background: rgba(74, 46, 31, 0.18);
+  display: flex; align-items: flex-start; justify-content: center; padding: 18vh 16px 0; box-sizing: border-box;
+}
+.authcard-scrim[hidden] { display: none; }
+.authcard-tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.authcard-tab {
+  font: inherit; font-size: 0.9rem; color: var(--ink-soft); background: var(--paper);
+  border: 1.5px dashed rgba(138, 90, 59, 0.4); border-radius: 999px; padding: 0.35em 1em; cursor: pointer;
+}
+.authcard-tab[aria-selected="true"] { color: var(--card); background: var(--stitch); border-style: solid; }
+.authcard-field { display: block; margin: 0 0 10px; }
+.authcard-field span { display: block; margin-bottom: 4px; font-size: 0.85rem; color: var(--ink-soft); }
+.authcard-field input {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: 0.95rem; color: var(--ink); background: var(--paper);
+  border: 1.5px solid rgba(138, 90, 59, 0.4); border-radius: 8px; padding: 0.4em 0.6em;
+}
+.authcard-msg { margin: 2px 0 10px; min-height: 1em; font-size: 0.82rem; color: #b5452e; }
+.authcard-msg.ok { color: var(--ink); }
+.authcard-go {
+  font: inherit; font-size: 0.95rem; color: var(--card); background: var(--stitch); border: 0;
+  border-radius: 8px; padding: 0.45em 1.2em; cursor: pointer; width: 100%;
+}
+.authcard-go:disabled { opacity: 0.5; cursor: not-allowed; }
+.authcard-title { margin: 0 0 10px; font-size: 1rem; line-height: 1.4; }
+
+/* the small "who's signed in" popover in the header (accountmenu.js) */
+.acctpop p { margin: 0 0 8px; line-height: 1.4; }
+.acctpop-who { font-size: 0.92rem; }
+.acctpop-actions { display: flex; flex-direction: column; gap: 6px; }
+.acctpop-link, .acctpop-btn {
+  font: inherit; font-size: 0.85rem; text-align: left; color: var(--ink); background: var(--paper);
+  border: 1.5px dashed var(--stitch); border-radius: 10px; padding: 0.4em 0.7em; cursor: pointer; text-decoration: none; display: block;
+}
+.acctpop-link:hover, .acctpop-btn:hover { background: var(--paper-2); }
+
+/* friends.html: list rows */
+.flist { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.flist li {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--paper); border: 1.5px dashed rgba(138, 90, 59, 0.4); border-radius: 10px; padding: 0.5em 0.8em;
+}
+.flist .fname { font-size: 0.95rem; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flist li > button { flex: 0 0 auto; white-space: nowrap; }
+.flist .fpending { color: var(--ink-soft); font-size: 0.85rem; }
+.flist button {
+  font: inherit; font-size: 0.82rem; color: var(--ink); background: var(--card); border: 1.5px dashed var(--stitch);
+  border-radius: 999px; padding: 0.25em 0.9em; cursor: pointer;
+}
+.flist button:hover { background: var(--paper-2); }
+.flist-empty { color: var(--ink-soft); font-size: 0.88rem; margin: 0 0 14px; }
+.fpage { max-width: 32rem; margin: 0 auto; padding: 24px 16px 60px; }
+.fpage h2 { font-size: 1rem; color: var(--ink-soft); font-weight: normal; margin: 1.6em 0 0.6em; }
+.freq-row { display: flex; gap: 8px; margin-bottom: 4px; }
+.freq-row input {
+  flex: 1; min-width: 0; font: inherit; font-size: 0.95rem; color: var(--ink); background: var(--paper);
+  border: 1.5px solid rgba(138, 90, 59, 0.4); border-radius: 8px; padding: 0.4em 0.6em;
+}
+.freq-row button {
+  font: inherit; font-size: 0.9rem; color: var(--card); background: var(--stitch); border: 0;
+  border-radius: 8px; padding: 0.4em 1.1em; cursor: pointer; white-space: nowrap;
+}
+
+/* header popovers never run past the bottom of a short (landscape phone) screen */
+.invite-pop.acctpop { max-height: calc(100vh - 80px); max-height: calc(100dvh - 80px); overflow-y: auto; overscroll-behavior: contain; }
+/* phones: friend-row buttons and Send get a 44px tap height */
+@media (max-width: 700px) {
+  .flist li { padding-top: 0.2em; padding-bottom: 0.2em; gap: 10px; }
+  .flist button, .freq-row button { min-height: 44px; }
+  .flist li > button + button { margin-left: 0; }
+}
+
+/* the quiet "view only" note for a stranger visiting a town (town.js) */
+.viewonly-note { line-height: 1.5; }
+.viewonly-note a { color: var(--stitch); }
+
+/* phones: finger-sized tabs and submit button */
+@media (max-width: 700px) {
+  .authcard-tab, .authcard-go { min-height: 44px; }
+}

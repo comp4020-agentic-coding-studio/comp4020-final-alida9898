@@ -98,6 +98,8 @@ h1 { font-size: clamp(2.4rem, 8vw, 3.6rem); margin: 0.2em 0 0.4em; letter-spacin
   content: ""; position: absolute; top: -2px; right: -2px; width: 0.6rem; height: 0.6rem; border-radius: 50%;
   background: #e6b45c; border: 2px solid var(--paper);
 }
+/* a friend request is waiting (friendsbar.js): red, unlike the amber "someone's here" dot on #who */
+#friends.has-dot .tool-ico::after, #menu-btn.has-dot .tool-ico::after { background: #c8452e; }
 .wide { display: inline; }
 .narrow { display: none; }
 /* the small card under the friends button */
@@ -233,3 +235,8 @@ body.house #back { margin-left: auto; }
 }
 .views button[aria-pressed="true"] { background: var(--paper-2); }
 .house-link { display: inline-block; margin-top: 0.4rem; }
+
+/* the quiet "Add as friend" link: still looks like a link, but the tap area is finger-sized */
+#view-only-add, #view-only-note-add {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 6px; margin: -11px -6px; vertical-align: middle;
+}

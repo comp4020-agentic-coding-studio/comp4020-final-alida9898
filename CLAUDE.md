@@ -45,8 +45,8 @@
   Never deploy without my go-ahead.
 
 ## 子 agent / Subagents
-固定五个，定义在 `.claude/agents/`。需要更细的分工时再加。
-Five fixed agents, defined in `.claude/agents/`. Add more when finer roles are needed.
+固定六个，定义在 `.claude/agents/`。需要更细的分工时再加。
+Six fixed agents, defined in `.claude/agents/`. Add more when finer roles are needed.
 
 | 名字 Name | 负责 Owns | 不准碰 Must not touch | 做完要交 Hands back |
 |---|---|---|---|
@@ -55,6 +55,7 @@ Five fixed agents, defined in `.claude/agents/`. Add more when finer roles are n
 | ui | 页面上的按钮、卡片、文字、中英文 / buttons, cards, text, both languages | 3D 场景、服务器 / 3D scene, server | 电脑和手机宽度的截图 / desktop and phone-width screenshots |
 | mobile | 手机端：窄屏布局、触屏手势、手机上的 3D 显示 / phone: narrow layouts, touch gestures, 3D on phones | 先只查不改，除非我让修 / audit only unless asked to fix | 问题清单：页面、尺寸、问题、截图、严重程度、修法 / issue list with page, size, problem, screenshot, severity, fix |
 | checker | 只检查不改：`pnpm check`、控制台、按清单截图、两个窗口测多人 / checks only: `pnpm check`, console, checklist screenshots, two-tab multiplayer test | 任何代码 / any code | 通过或不通过，加上问题清单和截图 / pass/fail, issue list, screenshots |
+| server | `server/` 目录：账号、好友关系、权限校验、数据库结构、日志 / the `server/` directory: accounts, friends, permission checks, database schema, logging | 3D 场景、相机、模型、界面文字和样式 / 3D scene, cameras, models, UI text and style | 改了哪些接口和数据表、新测试清单和 `pnpm check` 结果、权限设计的简述 / which endpoints and tables changed, new-test list and `pnpm check` result, a short note on the permission design |
 
 - 主会话不自己动手改代码。相机、模型、界面、手机端的改动，一律派给表里对应的 agent；主会话只负责写理解、分派、汇总结果。A、B 两种情况都一样，改动再小也一样。
   The main session never edits code itself. Camera, model, UI and phone changes always go to the matching agent above; the main session only writes its understanding, dispatches, and sums up. This holds in both case A and case B, however small the change.
@@ -106,8 +107,8 @@ Five fixed agents, defined in `.claude/agents/`. Add more when finer roles are n
   Wall and counter items use eye-level views, not top-down. When unsure which view, ask me.
 - 目前只有猫一个角色（狸花猫，上釉粘土感），要做得精细。以后可能会加别的角色。
   For now the cat (a glazed-clay grey tabby) is the only character and must be refined. More may come later.
-- 不做登录和账号（作业不要求，访客链接已经够用）。
-  No login or accounts (not required; the guest link is enough).
+- ~~不做登录和账号（作业不要求，访客链接已经够用）~~ —— 2026-10-19 起改为需要账号：crit 10 要求服务器能分清不同的人，账号+好友关系替代了原来的邀请链接。
+  ~~No login or accounts (not required; the guest link is enough)~~ — changed 2026-10-19: crit 10 requires the server to tell people apart, so accounts + mutual-consent friends replace the old guest link.
 
 ## 不要自作主张 / Don't act on your own
 - 看到不认识的改动，不要自己还原，先问我。

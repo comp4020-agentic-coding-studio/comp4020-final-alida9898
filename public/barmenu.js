@@ -9,7 +9,8 @@
 export function createBarMenu(btn, menu, closeOn = []) {
   const isOpen = () => menu.classList.contains("open");
   function set(open) { menu.classList.toggle("open", open); btn.setAttribute("aria-expanded", String(open)); }
-  btn.addEventListener("click", () => set(!isOpen()));
+  // the naming card (identity.js) is the one allowed interruption: nothing behind it opens while it shows
+  btn.addEventListener("click", () => { if (!isOpen() && document.querySelector(".idcard-scrim:not([hidden]), .authcard-scrim:not([hidden])")) return; set(!isOpen()); });
   menu.addEventListener("click", (e) => { if (closeOn.some((id) => e.target.closest?.(`#${id}`))) set(false); });
   addEventListener("pointerdown", (e) => { if (isOpen() && !menu.contains(e.target) && !btn.contains(e.target)) set(false); }, true);
   addEventListener("keydown", (e) => { if (e.key === "Escape" && isOpen()) { e.stopImmediatePropagation(); set(false); btn.focus(); } }, true);

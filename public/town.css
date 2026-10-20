@@ -14,7 +14,7 @@ body.town { --sky: #f6ecdc; }
   background: var(--card); border: 2px dashed var(--stitch); border-radius: 16px; padding: 10px 14px 12px;
   box-shadow: 0 6px 22px rgba(74, 46, 31, 0.12);
 }
-#guest-card { top: 14px; }
+#guest-card, #view-only-card { top: 14px; }
 .tcard p { margin: 0 0 6px; line-height: 1.45; }
 .tcard-title { font-size: 0.98rem; }
 .tcard.season { left: 50%; top: 24%; transform: translateX(-50%); text-align: center; cursor: pointer; transition: opacity 0.8s; }
@@ -67,6 +67,13 @@ body.town { --sky: #f6ecdc; }
   /* stack under the guest card */
   .nboard { right: 12px; left: 12px; width: auto; top: auto; position: absolute; }
 }
+
+/* logged-out visit: the login card centred over the dimmed street */
+.login-slot {
+  position: absolute; z-index: 20; left: 50%; top: 22%; transform: translateX(-50%);
+  width: min(22rem, calc(100% - 32px));
+}
+.linkish { font: inherit; background: none; border: 0; text-decoration: underline; cursor: pointer; color: var(--ink-soft); padding: 0; }
 
 /* the town's name in the header; the owner can tap it to rename */
 .town-name { font: inherit; font-size: 0.95rem; color: var(--ink); background: none; border: 0; padding: 0.15em 0.4em; border-radius: 8px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

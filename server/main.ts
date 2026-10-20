@@ -4,6 +4,7 @@ import { extname, join as pathJoin, normalize } from "node:path";
 import { marked } from "marked";
 import { handleShops, shopExists } from "./shops.ts";
 import { handleWorlds } from "./worlds.ts";
+import { handleAccounts } from "./accounts.ts";
 import { getWorld, worldShopOfType } from "./db.ts";
 import { half, join, joinRoom, place, roomHalves, roomStatus } from "./db.ts";
 
@@ -77,6 +78,7 @@ const server = createServer(async (req, res) => {
   const p = url.pathname;
   let m: RegExpMatchArray | null;
   try {
+    if ((p.startsWith("/api/auth") || p.startsWith("/api/friends")) && (await handleAccounts(req, res, p, url, json, body))) return;
     if (p.startsWith("/api/shops") && (await handleShops(req, res, p, url, json, body))) return;
     if ((p.startsWith("/api/worlds") || p === "/api/season") && (await handleWorlds(req, res, p, url, json, body))) return;
     if (req.method === "POST" && p === "/api/join") return json(res, 200, join());

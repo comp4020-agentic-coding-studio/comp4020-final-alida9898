@@ -11,9 +11,12 @@ import { LAST_SHOP_KEY, clientId, connect, loadShop, shopFromUrl, shopUrl, world
 import { loadShopType, typeFromUrl } from "./shops/index.js";
 import { currentSeason, SEASON_NAME, SEEN_KEY } from "./shops/season.js";
 import { createWeather } from "./shops/weather.js";
-import { createIdentityCard, enteredThisVisit, whoLabel } from "./identity.js";
+import { createIdentityCard, whoLabel } from "./identity.js";
 import { createInvite } from "./invite.js";
+import { createFriendsBar } from "./friendsbar.js";
+import { createAccountMenu } from "./accountmenu.js";
 import { createBarMenu } from "./barmenu.js";
+import { api, createAuthCard } from "./auth.js";
 
 const $ = (id) => document.getElementById(id);
 const debug = new URLSearchParams(location.search).has("debug");
@@ -60,6 +63,8 @@ const TEXT = {
     reqDoneGuest: (x) => `帮朋友摆好了${x}`, reqDoneOwner: (x) => `朋友帮你摆好了${x}`,
     namedTown: (n) => `${n} 的小镇`, helperPlaced: (n, x) => `${n || "一位匿名朋友"} 帮你放了${x}`,
     shareText: (n, l) => n ? `${n} 请你来帮忙摆小镇：${l}` : `来帮我摆小镇吧：${l}`,
+    viewOnly: "只能看看：先加对方为好友，才能一起摆。", addFriend: "加好友",
+    loginNeeded: "登录之后才能来帮忙摆。",
   },
   en: {
     brand: "A Corner of Town", toggle: "中文", toggleAria: "Switch to Chinese", menu: "Menu", crumbsAria: "Where you are", cafe: "Café", back: "‹ Back", loading: "Shaping the café out of clay…",
@@ -93,6 +98,8 @@ const TEXT = {
     reqDoneGuest: (x) => `You finished the ${x} for your friend`, reqDoneOwner: (x) => `A friend finished the ${x}`,
     namedTown: (n) => `${n}'s Town`, helperPlaced: (n, x) => `${n || "An anonymous friend"} placed the ${x} for you`,
     shareText: (n, l) => n ? `${n} invites you to help set up their town: ${l}` : `Come help set up my town: ${l}`,
+    viewOnly: "View only — once you're friends, you can help place things.", addFriend: "Add as friend",
+    loginNeeded: "Log in to help place things here.",
   },
 };
 const LANG_KEY = "lang";
@@ -102,20 +109,45 @@ const T = () => TEXT[lang];
 const L = (label) => label[lang] || label.zh || label.en;
 
 // ---- the shop (server) -----------------------------------------------------
-// `/shop/<id>` (open shop) or `/w/<world>/<type>?t=<token>` (a shop in a world)
+// `/shop/<id>` (open shop) or `/w/<world>/<type>` (a shop in a world — who you are
+// comes from the session cookie now, server/accounts.ts; no more `?t=` token)
 const world = worldFromUrl();
 const me = clientId();
-// quotas count per browser: the same helper id the town page keeps
-const helper = (() => { try { const h = localStorage.getItem("town-helper-v1"); if (h && /^[\w-]{1,64}$/.test(h)) return h; localStorage.setItem("town-helper-v1", me); } catch {} return me; })();
-const worldShop = world ? await loadWorldShop(world, helper).catch(() => null) : null;
+let account = null; // the signed-in account, or null (world shops require one)
+let loginFailure = false; // world shop + not logged in: show a login gate, not a 404
+let worldShop = null;
+if (world) {
+  const who = await api.me();
+  account = who.account;
+  if (account) worldShop = await loadWorldShop(world).catch(() => null);
+  else loginFailure = true;
+}
 const shop = world ? worldShop && worldShop.shop : shopFromUrl();
-if (!shop) { location.replace(world ? `/w/${world.world}?t=${encodeURIComponent(world.t)}` : "/"); await new Promise(() => {}); }
-// a guest helps with a daily quota; the owner places freely
-const guest = !!worldShop && worldShop.role === "guest";
+// not logged in, trying to open a world's shop: a quiet login card, not a 404 and
+// not a silent bounce — the link is fine, you just need to sign in to use it
+if (loginFailure) {
+  const card = document.createElement("div");
+  card.className = "hint-card"; card.style.cursor = "default";
+  const authCard = createAuthCard({ lang: () => lang, modal: false, onAuthed: () => location.reload() });
+  const p = document.createElement("p"); p.className = "hint-title"; p.textContent = T().loginNeeded;
+  card.append(p, authCard.el);
+  $("loading").replaceWith(card);
+  await new Promise(() => {});
+}
+if (!shop) { location.replace(world ? `/w/${world.world}` : "/"); await new Promise(() => {}); }
+// role is "owner" or "guest" (server/db.ts worldPermission); a guest who isn't an
+// accepted friend can only look — canPlace tells the two apart
+const isOwner = !!worldShop && worldShop.role === "owner";
+const canPlace = !!worldShop && (isOwner || worldShop.canPlace);
+const guest = !!worldShop && !isOwner && canPlace; // an accepted friend, helping with a daily quota
+const viewOnly = !!worldShop && !canPlace; // logged in, but not a friend of the owner: look only
 let idCard = null; // the identity card (set up once the net extras exist)
 let ownerName = worldShop?.ownerName || ""; // the town owner's name ("" = unnamed); live via SSE `name`
+// `worldShop.ownerUsername`: the owner's account username — distinct from
+// `ownerName` above (their free-text town nickname) — used to prefill "Add as friend".
+const ownerUsername = worldShop?.ownerUsername || "";
 let quota = guest ? worldShop.quota : null;
-const townUrl = world ? `/w/${world.world}?t=${encodeURIComponent(world.t)}` : null;
+const townUrl = world ? `/w/${world.world}` : null;
 let helpedHere = false; // placed here this visit (so a 0 means "enough", not "3 towns")
 const spent = () => guest && !!quota && quota.left <= 0;
 const placed = new Set();
@@ -126,6 +158,9 @@ const shopLoad = (async () => {
 })();
 // the shop type (a definition in public/shops/) and the season it's in
 const def = await loadShopType(typeFromUrl());
+// views the developer saved with ?editor (assets/editor/<type>.json): a saved camera beats the computed one
+const savedViews = await fetch(`/api/editor/${String(typeFromUrl()).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "x"}`)
+  .then((r) => (r.ok ? r.json() : null)).then((j) => (j && j.views) || {}).catch(() => ({}));
 const season = await currentSeason();
 const { room: ROOM, levels: LEVELS, tube: TUBE } = def;
 const YARD = def.yard || null;
@@ -264,7 +299,7 @@ const storeyBox = (level) => isYard(level)
 // tells a piece mark from an item mark on the same id)
 // Requests are hints only: nothing here ever stops a placement.
 const reqOn = !!worldShop; // open shops (no role) get no request UI at all
-const owner = reqOn && worldShop.role === "owner";
+const owner = isOwner; // kept as a short local alias; used throughout below
 const rid = (x) => String(x).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "x";
 const areaId = (level) => (isYard(level) ? "yard" : `l${level}`);
 const zoneReqId = (level, zone) => rid(`${areaId(level)}-${zone}`);
@@ -625,9 +660,23 @@ const AZ_STEPS = [0, 15, -15, 30, -30, 45, -45, 60, -60, 75].map(deg);
 const EL_STEPS = [0, 10, 20].map(deg);
 const frameCache = new Map();
 /** Camera position + target that fit box `v` into the free part of the screen, with a clear line of sight. */
+const viewKey = (v) => Object.values(v.kind === "item" ? { kind: v.kind, id: v.id } : v.kind === "zone" ? { kind: v.kind, level: v.level, zone: v.zone } : v.kind === "storey" ? { kind: v.kind, level: v.level } : { kind: v.kind }).join(":");
 function frame(v, zoomOut = 1, at = path.indexOf(v)) {
+  const saved = savedViews[viewKey(v)]?.camera;
+  if (saved && !(editMode && edit?.freeCam)) {
+    const t = new THREE.Vector3(...saved.target), p0 = new THREE.Vector3(...saved.position);
+    const d = p0.distanceTo(t);
+    return { p: t.clone().addScaledVector(p0.sub(t).normalize(), d * zoomOut), t, d, fov: saved.fov };
+  }
   const box = viewBox(v), c = box.getCenter(new THREE.Vector3());
-  const [az0, el0] = preferredAngle(v, box);
+  let [az0, el0] = preferredAngle(v, box);
+  const top = v.kind === "item" && topOf(v.id);
+  if (top) {
+    // a worktop is seen square-on to its front, looking a little down (as the saved bar counter)
+    const f = new THREE.Vector3(0, 0, 1).applyQuaternion(items.get(v.id).obj.getWorldQuaternion(new THREE.Quaternion()));
+    const turn = Math.atan2(f.x, f.z);
+    az0 = Math.abs(turn) > deg(20) ? THREE.MathUtils.clamp(turn, -1.13, 1.13) : 0; el0 = deg(15);
+  }
   let parentD = Infinity;
   // each level is closer than the one it came from
   if (v.kind === "item" && at > 0) parentD = frame(path[at - 1], 1, at - 1).d * 0.8;
@@ -640,7 +689,6 @@ function frame(v, zoomOut = 1, at = path.indexOf(v)) {
       ? zoneItems(v.level, v.zone).filter((it) => it.layer === 1 && (isYard(v.level) || !it.season)).map((it) => new THREE.Box3().setFromObject(it.obj).getCenter(new THREE.Vector3()))
       : [];
     // a wall piece is a front elevation: square to its wall, at its own height, nothing to search
-    const top = v.kind === "item" && topOf(v.id);
     const wall = v.kind === "item" && !top ? wallOf(v.id) : null;
     if (wall) {
       const dir = WALL_DIR[wall].clone();
@@ -650,11 +698,12 @@ function frame(v, zoomOut = 1, at = path.indexOf(v)) {
     // big pieces / trees in front count as in the way too (only ones actually standing there)
     const big = v.kind === "building" ? [] : occCandidates(v).filter((o) => o.tree === undefined && (!o.it || placed.has(o.it.id) || editMode));
     // far trees never steer the camera: they just step aside (stepOcclusion)
-    for (const [ei, del] of best ? [] : EL_STEPS.entries()) {
-      for (const [ai, daz] of AZ_STEPS.entries()) {
+    // a worktop only turns a little, and only if square-on is blocked
+    for (const [ei, del] of best ? [] : (top ? [0] : EL_STEPS).entries()) {
+      for (const [ai, daz] of (top ? AZ_STEPS.slice(0, 3) : AZ_STEPS).entries()) {
         // a top surface is seen at eye level raised to just above the tabletop: a shallow angle, so its
         // things stand up as they would to someone at the counter, not seen from above
-        const az = THREE.MathUtils.clamp(az0 + flip * daz, deg(-80), deg(80)), el = (top ? deg(12) : el0) + del;
+        const az = THREE.MathUtils.clamp(az0 + flip * daz, deg(-80), deg(80)), el = el0 + del;
         const dir = dirFrom(az, el);
         const d = Math.min(fitDistance(v, box, dir), parentD);
         const p = c.clone().addScaledVector(dir, d);
@@ -663,6 +712,7 @@ function frame(v, zoomOut = 1, at = path.indexOf(v)) {
         // a clear view matters most; then staying near the preferred angle; then a lower camera
         const score = occ * 100 + ai * 1.2 + ei * 4;
         if (!best || score < best.score) best = { score, dir, d, occ };
+        if (top && occ > 0 && debug) console.debug("[frame] worktop blocked square-on", v.id, `turn ${Math.round(daz * 57.3)}°`, occ.toFixed(2));
         if (occ === 0 && ai === 0 && ei === 0) break;
       }
       if (best && best.occ === 0 && best.score < 5) break;
@@ -1192,7 +1242,7 @@ function cellFor(it) {
     cell.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fly_(); } });
   }
   if (!thumbs.has(it.id)) { const q = thumbQueue.indexOf(it.id); if (q > 0) thumbQueue.unshift(...thumbQueue.splice(q, 1)); }
-  if (state === "open" && spent()) cell.classList.add("spent");
+  if (state === "open" && (spent() || viewOnly)) cell.classList.add("spent");
   else if (state === "open") cell.addEventListener("pointerdown", (e) => startPending(e, it, cell));
   cell.title = heldHere ? `${L(it.label)} · ${T().holding}` : L(it.label);
   let asked = false;
@@ -1254,13 +1304,20 @@ function renderUI() {
   $("mute").title = $("mute").ariaLabel = muted ? t.unmute : t.mute;
   $("help").querySelector(".tool-label").textContent = t.helpLabel;
   $("help").title = $("help").ariaLabel = t.help;
+  friendsBar?.render();
+  accountMenu?.render();
   idCard?.render();
-  $("who").hidden = !guest || !idCard?.choice();
+  $("who").hidden = !guest;
   if (guest && idCard) {
-    const c = idCard.choice(), w = whoLabel(lang, c);
-    $("who").querySelector(".tool-ico").textContent = c && !c.anon && c.name ? [...c.name][0] : "🙂";
+    const c = idCard.choice() || { anon: false }, uname = account?.username || "", w = whoLabel(lang, c, uname);
+    $("who").querySelector(".tool-ico").textContent = c.anon ? "🙂" : [...uname][0] || "🙂";
     $("who").querySelector(".tool-label").textContent = w.text;
     $("who").title = $("who").ariaLabel = `${w.text} · ${w.title}`;
+  }
+  $("view-only-note").hidden = !viewOnly;
+  if (viewOnly) {
+    $("view-only-note-text").textContent = T().viewOnly;
+    $("view-only-note-add").textContent = T().addFriend;
   }
   if (!$("hint-card").hidden) fillHint();
   // breadcrumb (in a world, its root is the town)
@@ -1475,7 +1532,7 @@ async function sendPlace(it) {
   const r = await net.place(it.id);
   inflight.delete(it.id);
   if (r === "ok" || r === "taken") { retry.delete(it.id); return; } // taken: the other person put it there first, it's placed either way
-  if (r === "full" || r === "quota") { revert(it); return; }
+  if (r === "full" || r === "quota" || r === "forbidden") { revert(it); return; }
   if (placed.has(it.id) && !retry.has(it.id)) revert(it);
   retry.add(it.id);
   scheduleRetry();
@@ -1490,27 +1547,31 @@ function scheduleRetry() {
       if (it.parent && !placed.has(it.parent)) continue; // wait for what it sits on
       const r = await net.place(id);
       if (r === "ok" || r === "taken") { retry.delete(id); landRemote(id); } // the "placed" event may beat us; landRemote is idempotent
-      else if (r === "full" || r === "quota") retry.delete(id);
+      else if (r === "full" || r === "quota" || r === "forbidden") retry.delete(id);
     }
     retryWait = Math.min(30000, retryWait * 2);
     scheduleRetry();
   }, retryWait);
 }
 
-// a friend's name (from the town page's card) rides along with each placement
-const netExtra = worldShop ? { t: worldShop.t, helper } : {};
-// identity card (identity.js): a shop opened straight from a link asks too
+// a friend's display choice (identity.js: show as their username, or anonymous)
+// rides along with each placement
+const netExtra = {};
+// identity card (identity.js): optional, never forced — a friend's username already
+// identifies them; this only controls whether the owner sees that name or "anonymous"
 idCard = worldShop ? createIdentityCard({
-  world: world.world, role: guest ? "guest" : "owner", lang: () => lang, ownerName: () => ownerName,
-  save: guest ? null : async ({ name }) => {
-    const res = await fetch(`/api/worlds/${world.world}/name`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ t: worldShop.t, name }) });
+  world: world.world, role: isOwner ? "owner" : "guest", lang: () => lang, ownerName: () => ownerName,
+  username: () => account?.username || "",
+  save: !isOwner ? null : async ({ name }) => {
+    const res = await fetch(`/api/worlds/${world.world}/name`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ name }) });
     if (!res.ok) throw new Error(String(res.status));
     ownerName = (await res.json()).ownerName || "";
   },
   onChoose: (c) => { if (guest) setHelperName(c); renderUI(); },
 }) : null;
-// anonymous sends "" so a name stored from an earlier visit is cleared on the server
-function setHelperName(c) { netExtra.helperName = c && !c.anon ? c.name : ""; }
+// anonymous sends "" so a name stored from an earlier visit is cleared on the server;
+// otherwise the owner sees the friend's actual account username
+function setHelperName(c) { netExtra.helperName = c && !c.anon ? account?.username || "" : ""; }
 if (guest) setHelperName(idCard.choice());
 if (idCard) $("who").addEventListener("click", () => idCard.open());
 if (reqOn) { buildReqTargets(); note = worldShop.note; setRequests(worldShop.requests); }
@@ -1584,25 +1645,28 @@ function stepHoldDots(now) {
   }
 }
 
-// presence + invite: quiet when someone's here, more visible when you're alone
-// in a world: the owner invites to the town with the guest link; a guest doesn't invite
-const link = worldShop ? (worldShop.guestToken ? `${location.origin}/w/${world.world}?t=${worldShop.guestToken}` : null) : shopUrl(shop);
-// one friends button in the header (invite.js): a dot when someone else is here, and a small
-// card with the link when pressed. A guest has no link, so their button only shows who's here.
-const invite = createInvite($("friends"), {
-  link,
-  words: () => {
-    const t = T();
-    return {
-      label: link ? t.inviteShort : t.presentShort(present), title: worldShop ? t.inviteTown : t.invite, note: worldShop ? t.inviteTownNote : t.inviteNote,
-      copy: t.copy, copied: t.copied, share: t.share, presence: present > 1 ? t.present(present) : "",
-    };
-  },
-  shareText: () => (worldShop ? T().shareText(ownerName, link) : link),
+// presence + friends: quiet when someone's here, more visible when you're alone.
+// Crit 10: a world shop's "invite" is now a real friend request (friendsbar.js),
+// not a guest-token link — an open (non-world) shop keeps the old link-sharing
+// invite.js button, since that feature (one open café, anyone with the link)
+// is unrelated to accounts.
+const invite = worldShop ? null : createInvite($("friends"), {
+  link: shopUrl(shop),
+  words: () => { const t = T(); return { label: t.inviteShort, title: t.invite, note: t.inviteNote, copy: t.copy, copied: t.copied, share: t.share, presence: present > 1 ? t.present(present) : "" }; },
+  shareText: () => shopUrl(shop),
 });
+const friendsBar = worldShop ? createFriendsBar($("friends"), { lang: () => lang, live: !!account }) : null;
+$("view-only-note-add").addEventListener("click", () => friendsBar?.open(ownerUsername));
+const accountMenu = account ? createAccountMenu($("account"), {
+  lang: () => lang, username: () => account.username,
+  onLogout: () => { friendsBar?.stop(); location.href = "/"; },
+}) : null;
 // phones fold the header buttons into one ☰ list (barmenu.js). Made after the invite, so Esc folds the invite card first
-createBarMenu($("menu-btn"), $("bar-menu"), ["who", "help"]);
-function renderPresence() { invite.render(); }
+createBarMenu($("menu-btn"), $("bar-menu"), ["who", "help", "friends", "account"]);
+function renderPresence() {
+  invite?.render();
+  if (worldShop) $("friends").title = $("friends").ariaLabel = present > 1 ? T().present(present) : "";
+}
 addEventListener("pagehide", () => { if (drag) net.hold(drag.it.id, false); net.close(); });
 
 // ---- loop --------------------------------------------------------------------
@@ -1695,7 +1759,9 @@ function showSeasonCard() {
 const seasonNews = seasonItems.length > 0 && lastSeen !== season;
 try { localStorage.setItem(SEEN_KEY, season); } catch {}
 // a friend chooses each visit (once per tab: town → shop doesn't ask again); the owner only while unnamed
-if (idCard && (guest ? !enteredThisVisit(world.world) : !ownerName)) idCard.open();
+// only the owner gets opened automatically (while unnamed); a friend's identity
+// toggle is optional and never forced open (see identity.js)
+if (idCard && isOwner && !ownerName) idCard.open();
 if (seasonNews) showSeasonCard();
 else if (!hintSeen) showHint();
 if (editMode) {

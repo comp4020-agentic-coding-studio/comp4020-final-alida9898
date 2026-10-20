@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { createShop, getShop, getWorld, helperName, NAME_MAX, setHelperName, ITEM_RE, openShop, placeAsGuest, placeItem, quota, REQUEST_ID_RE, REQUEST_SCOPES, setRequest, shopRequests, shopWorld, type GuestPlaceResult } from "./db.ts";
+import { createShop, getShop, getWorld, helperName, HELPER_NAME_MAX, logEvent, setHelperName, ITEM_RE, openShop, placeAsGuest, placeItem, quota, REQUEST_ID_RE, REQUEST_SCOPES, setRequest, shopRequests, shopWorld, worldPermission, type GuestPlaceResult } from "./db.ts";
 import { canberraDay } from "./season.ts";
+import { currentAccount } from "./accounts.ts";
 
 // In-memory live state per shop: open SSE streams and what each client holds.
 // Not persisted — a restart just drops presence; EventSource reconnects.
@@ -50,30 +51,40 @@ export async function handleShops(req: IncomingMessage, res: ServerResponse, p: 
   }
   if ((m = p.match(/^\/api\/shops\/([\w-]+)\/place$/)) && req.method === "POST") {
     const shop = m[1];
-    const { item, client, t, helper, helperName: hn } = await body(req);
+    const { item, client, helperName: hn } = await body(req);
     if (typeof client !== "string" || !CLIENT_RE.test(client)) return json(res, 400, { error: "bad_client" }), true;
     if (typeof item !== "string" || !ITEM_RE.test(item)) return json(res, 400, { error: "bad_item" }), true;
-    // World shops need the owner or guest token; legacy shops (no world) stay open to anyone with the link.
+    // World shops require a logged-in account that is the owner or an accepted
+    // friend of the owner (server-enforced — never trust a client-sent role).
+    // Legacy shops (no world) stay open to anyone with the link, as before.
     const sw = shopWorld(shop);
     let r: GuestPlaceResult;
     let who = client;
+    let actingAccountId: string | undefined;
     let guest: { world: string; helper: string } | undefined;
     if (!sw) r = placeItem(shop, item, client);
     else {
       const w = getWorld(sw.world)!;
-      if (t === w.owner_token) {
-        who = `owner:${client}`;
-        r = placeItem(shop, item, client);
-      } else if (t === w.guest_token) {
-        const h = helper ?? client;
-        if (typeof h !== "string" || !CLIENT_RE.test(h)) return json(res, 400, { error: "bad_helper" }), true;
-        if (hn !== undefined && (typeof hn !== "string" || [...hn.trim()].length > NAME_MAX)) return json(res, 400, { error: "bad_helper_name" }), true;
-        guest = { world: sw.world, helper: h };
-        who = `guest:${h}`;
-        r = placeAsGuest(shop, sw.world, item, h, canberraDay());
-      } else {
-        log(`${shop} (world ${sw.world}/${sw.type}) place ${item} by ${client} -> forbidden (bad token)`);
+      const acct = currentAccount(req);
+      if (!acct) {
+        log(`${shop} (world ${sw.world}/${sw.type}) place ${item} -> forbidden (not logged in)`);
         return json(res, 403, { error: "forbidden" }), true;
+      }
+      actingAccountId = acct.id;
+      const perm = worldPermission(w, acct.id);
+      if (!perm.place) {
+        log(`${shop} (world ${sw.world}/${sw.type}) place ${item} by ${acct.username} -> forbidden (not a friend)`);
+        logEvent({ accountId: acct.id, world: sw.world, action: "place_item", result: "forbidden" });
+        return json(res, 403, { error: "forbidden" }), true;
+      }
+      if (perm.isOwner) {
+        who = `owner:${acct.username}`;
+        r = placeItem(shop, item, acct.id);
+      } else {
+        if (hn !== undefined && (typeof hn !== "string" || [...hn.trim()].length > HELPER_NAME_MAX)) return json(res, 400, { error: "bad_helper_name" }), true;
+        guest = { world: sw.world, helper: acct.id };
+        who = `friend:${acct.username}`;
+        r = placeAsGuest(shop, sw.world, item, acct.id, canberraDay());
       }
     }
     const where = sw ? `${shop} (world ${sw.world}/${sw.type})` : shop;
@@ -81,14 +92,16 @@ export async function handleShops(req: IncomingMessage, res: ServerResponse, p: 
     const qs = q ? ` [left ${q.left}, worlds left ${q.worldsLeft}]` : "";
     if (r.ok) {
       log(`${where} place ${item} by ${who} ok${qs}`);
+      if (sw) logEvent({ accountId: actingAccountId, world: sw.world, action: "place_item", result: "ok", detail: item });
       room(shop).holds.get(client)?.delete(item);
-      // a guest's name rides along so the owner sees who helped; stored per world
+      // a friend's display name rides along so the owner sees who helped; stored per world
       if (guest && typeof hn === "string") setHelperName(guest.world, guest.helper, hn.trim());
       const by = guest ? helperName(guest.world, guest.helper) : "";
       broadcast(shop, "placed", guest ? { item, client, guest: true, helperName: by } : { item, client });
       json(res, 200, q ? { placed: true, quota: q } : { placed: true });
     } else {
       log(`${where} place ${item} by ${who} -> ${r.reason}${qs}`);
+      if (sw) logEvent({ accountId: actingAccountId, world: sw.world, action: "place_item", result: r.reason, detail: item });
       const status = { unknown_shop: 404, bad_item: 400, taken: 409, full: 409, quota_today: 429, too_many_worlds: 429 }[r.reason];
       json(res, status, q && status === 429 ? { error: r.reason, quota: q } : { error: r.reason });
     }
@@ -96,12 +109,14 @@ export async function handleShops(req: IncomingMessage, res: ServerResponse, p: 
   }
   if ((m = p.match(/^\/api\/shops\/([\w-]+)\/requests$/)) && req.method === "POST") {
     const shop = m[1];
-    const { t, scope, id, on } = await body(req);
+    const { scope, id, on } = await body(req);
     if (!getShop(shop)) return json(res, 404, { error: "unknown_shop" }), true;
     const sw = shopWorld(shop);
     if (!sw) return json(res, 400, { error: "no_world" }), true;
-    if (t !== getWorld(sw.world)!.owner_token) {
+    const acct = currentAccount(req);
+    if (!acct || acct.id !== getWorld(sw.world)!.owner_account) {
       log(`${shop} (world ${sw.world}/${sw.type}) request change -> forbidden`);
+      logEvent({ accountId: acct?.id, world: sw.world, action: "request_change", result: "forbidden" });
       return json(res, 403, { error: "forbidden" }), true;
     }
     if (typeof scope !== "string" || !(REQUEST_SCOPES as readonly string[]).includes(scope)) return json(res, 400, { error: "bad_scope" }), true;

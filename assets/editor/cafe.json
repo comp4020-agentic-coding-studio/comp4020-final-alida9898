@@ -1,0 +1,44 @@
+{
+  "items": {},
+  "views": {
+    "zone:0:bar": {
+      "view": {
+        "kind": "zone",
+        "level": 0,
+        "zone": "bar"
+      },
+      "camera": {
+        "position": [
+          -140.5,
+          396.3,
+          850.6
+        ],
+        "target": [
+          170,
+          104.5,
+          210
+        ],
+        "fov": 38
+      }
+    },
+    "item:l0-bar-counter": {
+      "view": {
+        "kind": "item",
+        "id": "l0-bar-counter"
+      },
+      "camera": {
+        "position": [
+          174,
+          200.2,
+          463.8
+        ],
+        "target": [
+          170,
+          116.9,
+          151.2
+        ],
+        "fov": 38
+      }
+    }
+  }
+}
