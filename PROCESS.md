@@ -174,3 +174,67 @@ local development and never changes live data.
   languages.
 - Backups are pushed to a `clay-wip` branch. Pushing to `main` deploys to Fly,
   so that only happens when I say so.
+
+# After crit 9
+
+## From invite links to accounts and friends
+
+Crit 10 asks the app to tell people apart and to check on the server what
+each person may do. The old invite links could not do that: whoever held
+the owner's link was the owner, and two friends with the same guest link
+looked like one person, told apart only by an id the browser made up for
+itself. Clearing the browser reset the daily limit.
+
+So the rule "no login" in `CLAUDE.md` was changed, and the links were
+replaced by accounts and mutual-consent friends
+([`f60ca39`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-alida9898/commit/f60ca39)). The agent first argued against accounts as a break from the
+calm design; I pointed out that signing in once does not ask the player to
+make decisions while playing, which is what the design is about.
+
+Before choosing permissions, a research agent looked at how Animal
+Crossing, Stardew Valley, Minecraft Realms and shared documents handle
+visitors. All of them separate looking from changing, so the rule became:
+anyone signed in can look at a town, only an accepted friend can place
+items, and the daily limit is counted per account on the server. The table
+and reasons are in the README.
+
+Server work had no owner among the five agents, so a sixth fixed agent,
+**server**, was added for accounts, friends, permission checks, the
+database and logging.
+
+Friend requests reach the other person live: their Friends button shows a
+red dot within a second or two, without reloading.
+
+## Logging
+
+Every sign-in, friend request, placement, refusal and change is written to
+an `events` table in the database (time, account, town, action, result), as
+well as to the server log that `flyctl logs` shows. The log lines name the
+account, so two people using the app at once can be told apart from the
+log alone, and the table keeps the record after the server restarts.
+
+## What the checks caught
+
+The checker tested with two accounts in separate sessions, and the mobile
+agent at a true 390px width (by loading the page in a 390px frame, because
+the browser window would not shrink that far).
+
+- **A friend with a long username could not place anything.** The server
+  checked the friend's display name against the 12-character limit meant
+  for town names, while usernames may be 24. The item appeared, then
+  quietly disappeared a few seconds later. It was invisible in the UI and
+  was found only by testing a real friend placing with a long name. Fixed
+  with a separate limit and a regression test.
+- Smaller ones, all fixed: error text that did not switch language, the
+  "Add as friend" shortcut not filling in the owner's username, the phone
+  menu staying open behind the friends card, buttons under 44px tall, and
+  old status text staying in the card after a live update.
+
+## Views that looked crooked
+
+Counter and table views kept a sideways angle left over from the first
+camera rules. They now face the furniture square-on, looking down about
+15°. Views I tune in `?editor` and export to `assets/editor/` are now read
+by the game, so a saved view replaces the computed one. On the deployed
+site this file is not served yet, so saved views only work locally for
+now.
