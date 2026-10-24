@@ -8,6 +8,7 @@ RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 COPY server/ server/
 COPY public/ public/
 COPY assets/stickers.json assets/
+COPY assets/editor/ assets/editor/
 COPY README.md ./
 COPY docs/ docs/
 ENV DATA_DIR=/data NODE_ENV=production

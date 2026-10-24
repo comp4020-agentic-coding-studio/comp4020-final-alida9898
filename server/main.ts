@@ -149,11 +149,10 @@ const server = createServer(async (req, res) => {
       await writeFile(pathJoin(dir, "boxes.json"), JSON.stringify(boxes, null, 2) + "\n");
       return json(res, 200, { ok: true, saved: Object.keys(boxes).length });
     }
-    // dev-only: the ?editor panel exports its tweaks here. Each top-level object
-    // ("items", "views") is merged key by key into what's already saved, newest wins.
-    // and reads them back, so an editor page can start from the last export
+    // read-only in every environment: returns previously-saved camera/item tweaks
+    // (assets/editor/<name>.json) so the live site can use saved views even though
+    // the ?editor panel itself (the write path below) only runs in local dev
     if ((m = p.match(/^\/api\/editor\/([a-z0-9-]{1,40})$/)) && req.method === "GET") {
-      if (!layoutEditingEnabled) return send(res, 404, "not found");
       try { return json(res, 200, JSON.parse(await readFile(pathJoin("assets/editor", `${m[1]}.json`), "utf8"))); }
       catch { return json(res, 404, { error: "none yet" }); }
     }
