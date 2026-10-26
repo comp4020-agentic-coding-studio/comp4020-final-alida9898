@@ -5,7 +5,17 @@ import { TOP_Y as TABLE_Y } from "../../clay/models/side-table.js";
 
 const L = (zh, en) => ({ zh, en });
 
-export async function populate({ group, model, place }) {
+// Soft-accent (pillow + blanket) palette by season: chair/sofa frame fabric stays put,
+// only the small knit/cushion pieces change. `null` season (e.g. editor preview) keeps
+// the original fixed colours.
+const SOFT = {
+  spring: 0xf2b8c6, // blush pink
+  summer: 0x8fcfe3, // sky blue
+  autumn: 0xd9822f, // warm rust
+  winter: 0x9c3b3b, // cozy burgundy
+};
+
+export async function populate({ group, model, place, season }) {
   const add = (obj, at, tag) => {
     place(obj, at);
     obj.userData.item = { parent: null, layer: 1, ...tag };
@@ -14,12 +24,14 @@ export async function populate({ group, model, place }) {
   };
   const item = async (name, opts, at, tag) => add(await model(name, { name: tag.id, ...opts }), at, tag);
 
+  const pillow = SOFT[season] ?? "mustard";
+  const blanketColor = SOFT[season] ?? "terracotta";
   const chair = { x: 160, z: 110, turn: 18 };
-  await item("armchair", { fabric: "blue", pillow: "mustard" }, { ...chair, y: 0 },
+  await item("armchair", { fabric: "blue", pillow }, { ...chair, y: 0 },
     { id: "l1-reading-armchair", label: L("窗边扶手椅", "Window armchair"), focus: true });
   // blanket over the chair's left arm (arm centre local x −33, top y 60)
   const t = (chair.turn * Math.PI) / 180;
-  await item("blanket", { color: "terracotta", arm: 14, drop: 18 },
+  await item("blanket", { color: blanketColor, arm: 14, drop: 18 },
     { x: chair.x - 33 * Math.cos(t), y: 60, z: chair.z + 33 * Math.sin(t), turn: chair.turn },
     { id: "l1-reading-blanket", parent: "l1-reading-armchair", layer: 2, label: L("毛毯", "Blanket") });
 

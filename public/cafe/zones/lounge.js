@@ -7,7 +7,16 @@ import { sofa, cushion, table, teapot, recordPlayer, vase } from "../placeholder
 
 const L = (zh, en) => ({ zh, en });
 
-export async function populate({ kit, THREE, group, model, place }) {
+// Soft-accent (pillow) palette by season: sofa frame colour stays put, only the
+// pillows swap. `null` season (e.g. editor preview) keeps the original fixed colours.
+const SOFT = {
+  spring: 0xf2b8c6, // blush pink
+  summer: 0x8fcfe3, // sky blue
+  autumn: 0xd9822f, // warm rust
+  winter: 0x9c3b3b, // cozy burgundy
+};
+
+export async function populate({ kit, THREE, group, model, place, season }) {
   const add = (obj, at, tag) => {
     place(obj, at);
     obj.userData.item = { parent: null, layer: 1, ...tag };
@@ -16,11 +25,12 @@ export async function populate({ kit, THREE, group, model, place }) {
   };
   const item = async (name, opts, at, tag) => add(await model(name, { name: tag.id, ...opts }), at, tag);
 
+  const pillowColor = SOFT[season];
   // ---------------------------------------------------------------- facing loveseats
   const SZ = 300;
   const seats = [
-    { x: 80, turn: 90, color: "leaf", pillow: "cream" },
-    { x: 262, turn: -90, color: 0xb98a6a, pillow: "blue" },
+    { x: 80, turn: 90, color: "leaf", pillow: pillowColor ?? "cream" },
+    { x: 262, turn: -90, color: 0xb98a6a, pillow: pillowColor ?? "blue" },
   ];
   for (const [i, s] of seats.entries()) {
     const n = i + 1, id = `l1-lounge-sofa-${n}`;
