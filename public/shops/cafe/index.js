@@ -14,6 +14,7 @@ export default {
   yard: YARD,
   seasons: {
     spring: () => import("./seasons/spring.js"),
-    // summer / autumn / winter: planned in ../README.md, not built yet
+    summer: () => import("./seasons/summer.js"),
+    // autumn / winter: being built and checked separately, wired in once each passes
   },
 };
