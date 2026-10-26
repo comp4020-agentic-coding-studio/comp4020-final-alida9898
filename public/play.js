@@ -10,7 +10,7 @@ import { collectItems, devTagIfEmpty } from "./cafe/items.js";
 import { LAST_SHOP_KEY, clientId, connect, loadShop, shopFromUrl, shopUrl, worldFromUrl, loadWorldShop } from "./cafe/net.js";
 import { loadShopType, typeFromUrl } from "./shops/index.js";
 import { currentSeason, SEASON_NAME, SEEN_KEY } from "./shops/season.js";
-import { createWeather } from "./shops/weather.js";
+import { createWeather, pickWeather } from "./shops/weather.js";
 import { createIdentityCard, whoLabel } from "./identity.js";
 import { createInvite } from "./invite.js";
 import { createFriendsBar } from "./friendsbar.js";
@@ -216,9 +216,12 @@ const camera = new THREE.PerspectiveCamera(38, 1, 10, 6000);
 
 $("loading").textContent = def.loading ? L(def.loading) : T().loading;
 const [{ storeys, tube, yard }, data] = await Promise.all([buildShop(scene, def, season), shopLoad]);
-// the same season sky, grass and drifting petals/leaves/snow as the town street
+// the same season sky, grass and drifting petals/leaves/snow as the town street,
+// plus a weather condition (clear/rain/cloudy) picked client-side — independent of
+// season, cosmetic only, so it doesn't need to match between two people in the same shop
 const weather = createWeather(scene, {
   season,
+  weather: pickWeather(),
   bounds: { x: [ROOM.x[0] - 12, YARD ? YARD.box.x[1] : ROOM.x[1] + 12], z: [ROOM.z[0] - 12, Math.max(ROOM.z[1], YARD ? YARD.box.z[1] : 0)] },
   groundY: 0,
   keepOut: { x: [ROOM.x[0] - 15, ROOM.x[1] + 15], z: [ROOM.z[0] - 15, ROOM.z[1] + 15] },

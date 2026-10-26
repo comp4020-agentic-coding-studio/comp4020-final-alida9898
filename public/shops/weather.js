@@ -12,6 +12,15 @@
 // render with an opaque clear colour over it. prefers-reduced-motion: no particles.
 // `keepOut` ({x, z} footprint, optional): no particles drift there — pass a building so it stays dry indoors.
 // `renderer`/`camera` are accepted for future use and may be omitted.
+//
+// `weather` ("clear" | "rain" | "cloudy", default "clear") is a second axis, independent
+// of season — any season can be rainy or cloudy. "rain" swaps the season's falling bits
+// for fast, near-vertical blue-grey streaks (it replaces rather than layers on top of the
+// season's petals/leaves/snow, so an autumn rainstorm doesn't look like leaves-plus-rain
+// clutter — the season still reads through the sky tint, grass and trees). "cloudy" only
+// flattens the sky gradient and fog toward grey; it does not touch scene lights, since
+// createWeather isn't handed a reference to any. `pickWeather()` below picks one client-side
+// (no server round-trip — this is cosmetic and doesn't need to match across viewers).
 import * as kit from "/clay/clay.js";
 
 const { THREE } = kit;
@@ -24,6 +33,30 @@ export const WEATHER = {
   winter: { top: "#b8c7d6", bottom: "#eef0f2", fog: 0xe8ecef, grass: 0xbcc2a8, crown: [0xe9ece8, 0x9aa88c], bits: { n: 70, colors: [0xffffff, 0xf3f1ec], size: 3, fall: 28, sway: 14 } },
 };
 
+// Weather conditions, independent of season.
+export const WEATHER_CONDITIONS = ["clear", "rain", "cloudy"];
+
+// rain: thin fast streaks, almost no sway — replaces the season's bits while it's falling
+const RAIN_BITS = { n: 90, colors: [0x7c93a6, 0x8fa4b6, 0x687f92], size: 5, fall: 150, sway: 3 };
+const CLOUD_GREY = 0xb7bcc2;
+
+/** Blend a CSS hex string or numeric hex colour toward flat grey (for the cloudy sky/fog). */
+function muted(hex, amt = 0.5) {
+  return new THREE.Color(hex).lerp(new THREE.Color(CLOUD_GREY), amt);
+}
+
+/**
+ * Pick a weather condition: `?weather=` overrides (dev/testing), else random,
+ * weighted toward clear. Client-local only — no server round-trip, so it may
+ * differ between two people looking at the same shop; that's fine, it's cosmetic.
+ */
+export function pickWeather(loc = location) {
+  const q = new URLSearchParams(loc.search).get("weather");
+  if (WEATHER_CONDITIONS.includes(q)) return q;
+  const x = Math.random();
+  return x < 0.6 ? "clear" : x < 0.8 ? "cloudy" : "rain"; // 60% clear · 20% cloudy · 20% rain
+}
+
 function skyTexture(top, bottom) {
   const c = document.createElement("canvas"); c.width = 4; c.height = 256;
   const g = c.getContext("2d"), grad = g.createLinearGradient(0, 0, 0, 256);
@@ -33,8 +66,9 @@ function skyTexture(top, bottom) {
   return t;
 }
 
-export function createWeather(scene, { season = "spring", bounds = { x: [-500, 500], z: [-500, 500] }, groundY = 0, keepOut = null } = {}) {
+export function createWeather(scene, { season = "spring", weather = "clear", bounds = { x: [-500, 500], z: [-500, 500] }, groundY = 0, keepOut = null } = {}) {
   const look = WEATHER[season] || WEATHER.spring;
+  const cloudy = weather === "cloudy", isRain = weather === "rain";
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const r = kit.rng(29);
   const [x0, x1] = bounds.x, [z0, z1] = bounds.z;
@@ -43,12 +77,16 @@ export function createWeather(scene, { season = "spring", bounds = { x: [-500, 5
   const owned = [];   // geometries / materials / textures to dispose
 
   const prevBg = scene.background, prevFog = scene.fog;
-  const sky = skyTexture(look.top, look.bottom); owned.push(sky);
+  // cloudy: flatten the sky + fog toward grey, a bit dimmer — no new geometry needed
+  const skyTop = cloudy ? muted(look.top, 0.55).getStyle() : look.top;
+  const skyBottom = cloudy ? muted(look.bottom, 0.4).getStyle() : look.bottom;
+  const fogColor = cloudy ? muted(look.fog, 0.55).getHex() : look.fog;
+  const sky = skyTexture(skyTop, skyBottom); owned.push(sky);
   scene.background = sky;
-  scene.fog = new THREE.Fog(look.fog, span * 2.5, span * 9);
+  scene.fog = new THREE.Fog(fogColor, span * (cloudy ? 2.0 : 2.5), span * (cloudy ? 7 : 9));
 
   // ground: a wide flat grass plane, just under the scene's own floor
-  const gGeo = new THREE.PlaneGeometry(span * 14, span * 14), gMat = new THREE.MeshLambertMaterial({ color: look.grass });
+  const gGeo = new THREE.PlaneGeometry(span * 14, span * 14), gMat = new THREE.MeshLambertMaterial({ color: cloudy ? muted(look.grass, 0.3).getHex() : look.grass });
   owned.push(gGeo, gMat);
   const ground = new THREE.Mesh(gGeo, gMat);
   ground.rotation.x = -Math.PI / 2; ground.position.set(cx, groundY - 2, cz); ground.receiveShadow = true;
@@ -72,17 +110,23 @@ export function createWeather(scene, { season = "spring", bounds = { x: [-500, 5
   }
   for (const m of [trunks, crowns]) { m.castShadow = false; m.receiveShadow = true; group.add(m); }
 
-  // particles: a handful of small flakes drifting down over bounds
+  // particles: a handful of small flakes drifting down over bounds. Rain replaces the
+  // season's bits outright (leaves-plus-rain reads as clutter at this scale) rather than
+  // layering on top of them; clear/cloudy keep whatever the season normally drops.
   let bits = null, state = null;
-  const b = look.bits, top = span * 0.55;
+  const b = isRain ? RAIN_BITS : look.bits, top = span * 0.55;
   if (!reduced && b) {
-    const geo = season === "winter" || season === "summer" ? new THREE.SphereGeometry(1, 6, 4) : new THREE.CircleGeometry(1, 7);
-    const mat = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide });
+    // rain: a thin elongated capsule (stretched on y) reads as a streak rather than a round drop
+    const geo = isRain
+      ? new THREE.CapsuleGeometry(0.22, 1, 2, 4)
+      : season === "winter" || season === "summer" ? new THREE.SphereGeometry(1, 6, 4) : new THREE.CircleGeometry(1, 7);
+    const mat = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, transparent: isRain, opacity: isRain ? 0.55 : 1 });
     owned.push(geo, mat);
     bits = new THREE.InstancedMesh(geo, mat, b.n); bits.castShadow = false; bits.frustumCulled = false;
     state = Array.from({ length: b.n }, (_, i) => {
       bits.setColorAt(i, col.setHex(b.colors[i % b.colors.length]));
-      return { x: x0 + r() * (x1 - x0), y: groundY + r() * top, z: z0 + r() * (z1 - z0), ph: r() * 6.28, spin: (r() - 0.5) * 3, s: b.size * (0.7 + r() * 0.6), sp: 0.7 + r() * 0.6 };
+      // rain streaks fall dead straight: no tumble, just a fixed slight lean
+      return { x: x0 + r() * (x1 - x0), y: groundY + r() * top, z: z0 + r() * (z1 - z0), ph: r() * 6.28, spin: isRain ? 0 : (r() - 0.5) * 3, s: b.size * (0.7 + r() * 0.6), sp: 0.7 + r() * 0.6, lean: isRain ? (r() - 0.5) * 0.3 : 0 };
     });
     group.add(bits);
   }
@@ -121,8 +165,8 @@ export function createWeather(scene, { season = "spring", bounds = { x: [-500, 5
       if (p.y < groundY) { p.y = groundY + top; p.x = x0 + r() * (x1 - x0); p.z = z0 + r() * (z1 - z0); }
       pos.set(p.x + Math.sin(t * 0.7 + p.ph) * b.sway, p.y, p.z + Math.cos(t * 0.5 + p.ph) * b.sway * 0.5);
       if (inside(pos.x, pos.z)) pos.y = -1e5; // parked out of sight while over the building
-      rot.set(t * p.spin + p.ph, t * p.spin * 0.6, p.ph);
-      m4.compose(pos, q.setFromEuler(rot), scl.set(p.s, p.s * (season === "autumn" ? 0.7 : 1), p.s));
+      rot.set(isRain ? p.lean : t * p.spin + p.ph, 0, isRain ? p.lean * 0.6 : t * p.spin * 0.6);
+      m4.compose(pos, q.setFromEuler(rot), isRain ? scl.set(p.s * 0.7, p.s * 6, p.s * 0.7) : scl.set(p.s, p.s * (season === "autumn" ? 0.7 : 1), p.s));
       bits.setMatrixAt(i, m4);
     }
     bits.instanceMatrix.needsUpdate = true;
