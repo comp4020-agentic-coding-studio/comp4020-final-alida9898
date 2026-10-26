@@ -14,7 +14,7 @@ import { INNER_Y as STAND_INNER } from "../../clay/models/umbrella-stand.js";
 
 const L = (zh, en) => ({ zh, en });
 
-export async function populate({ kit, group, model, place }) {
+export async function populate({ kit, group, model, place, season }) {
   const add = (obj, at, tag) => {
     place(obj, at);
     obj.userData.item = { parent: null, layer: 1, ...tag };
@@ -72,7 +72,7 @@ export async function populate({ kit, group, model, place }) {
   }
 
   // ---------------------------------------------------------------- entrance
-  await item("menu-board", { width: 64, height: 56 }, { x: 258, y: 125, z: 0 },
+  await item("menu-board", { width: 64, height: 56, season }, { x: 258, y: 125, z: 0 },
     { id: "l0-bar-menu", label: L("菜单板", "Menu board") });
   await item("doormat", { width: 80, depth: 50 }, { x: 270, y: 0, z: 380, turn: -90 },
     { id: "l0-bar-doormat", label: L("门垫", "Doormat") });
