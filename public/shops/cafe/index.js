@@ -15,6 +15,7 @@ export default {
   seasons: {
     spring: () => import("./seasons/spring.js"),
     summer: () => import("./seasons/summer.js"),
-    // autumn / winter: being built and checked separately, wired in once each passes
+    autumn: () => import("./seasons/autumn.js"),
+    winter: () => import("./seasons/winter.js"),
   },
 };
