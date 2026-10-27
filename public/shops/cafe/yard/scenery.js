@@ -10,7 +10,7 @@ const SCATTER = {
   autumn: { colors: [0xd9822f, 0xc8694a, 0xe0a23a, 0xb5532e], n: 60, size: [5, 7], flat: 0.8 },
   winter: { colors: [0xfaf6ef, 0xf3f1ec], n: 16, size: [16, 30], flat: 2.2 },
 };
-const GRASS = { spring: 0xa9c07e, summer: 0x8fae68, autumn: 0xb5b075, winter: 0xbcc2a8 };
+const GRASS = { spring: 0xa9c07e, summer: 0x8fae68, autumn: 0xb5b075, winter: 0xd3cebf }; // winter: frosted dry straw, not green
 const LIGHT = { spring: 0xffe1ea, summer: 0xfff1c4, autumn: 0xffc890, winter: 0xdce8ff };
 
 export async function build({ kit, model, place, season = "spring" }) {

@@ -45,13 +45,14 @@
   Never deploy without my go-ahead.
 
 ## 子 agent / Subagents
-固定六个，定义在 `.claude/agents/`。需要更细的分工时再加。
-Six fixed agents, defined in `.claude/agents/`. Add more when finer roles are needed.
+固定七个，定义在 `.claude/agents/`。需要更细的分工时再加。
+Seven fixed agents, defined in `.claude/agents/`. Add more when finer roles are needed.
 
 | 名字 Name | 负责 Owns | 不准碰 Must not touch | 做完要交 Hands back |
 |---|---|---|---|
 | camera | 店里和小镇所有视角：取景、遮挡、平视或俯视 / every camera view in shops and town: framing, occlusion, eye-level vs top-down | 模型、界面文字 / models, UI text | 每个受影响的视角都截图，包括改动范围以外的 / screenshots of every affected view, including ones outside the change |
-| clay | `public/clay/models/` 里的模型和角色 / models and characters | 相机、布局坐标、服务器 / cameras, layout coords, server | 近景截图、改之前的对比、三角面数 / close-ups, before/after, triangle count |
+| clay | `public/clay/models/` 里的模型和角色（含季节道具的建模和初始摆放）/ models and characters (incl. modeling and initial placement of seasonal decor items) | 相机、布局坐标、服务器 / cameras, layout coords, server | 近景截图、改之前的对比、三角面数 / close-ups, before/after, triangle count |
+| season | 季节/天气氛围：`weather.js` 的天气粒子与天色、院子配色表、软装（毛毯/靠枕）的季节配色参数 / season/weather ambience: weather.js particles & sky, yard color tables, seasonal color params on soft furnishings | 相机、模型几何体、服务器、布局坐标（只能改颜色）/ cameras, model geometry, server, layout coords (color only) | 四季/天气组合对比截图，确认默认晴天没有回归 / screenshots across seasons/weather, confirm default clear-weather has no regression |
 | ui | 页面上的按钮、卡片、文字、中英文 / buttons, cards, text, both languages | 3D 场景、服务器 / 3D scene, server | 电脑和手机宽度的截图 / desktop and phone-width screenshots |
 | mobile | 手机端：窄屏布局、触屏手势、手机上的 3D 显示 / phone: narrow layouts, touch gestures, 3D on phones | 先只查不改，除非我让修 / audit only unless asked to fix | 问题清单：页面、尺寸、问题、截图、严重程度、修法 / issue list with page, size, problem, screenshot, severity, fix |
 | checker | 只检查不改：`pnpm check`、控制台、按清单截图、两个窗口测多人 / checks only: `pnpm check`, console, checklist screenshots, two-tab multiplayer test | 任何代码 / any code | 通过或不通过，加上问题清单和截图 / pass/fail, issue list, screenshots |
@@ -69,8 +70,8 @@ Six fixed agents, defined in `.claude/agents/`. Add more when finer roles are ne
   Check motion frame by frame (pause / next frame), never from one still.
 - 声音、手感、好不好看，checker 判断不了，要说出来让我自己看。
   Sound, feel and taste can't be judged by checker — say so and let me look.
-- 所有 agent 都开自己的新标签页，不许用我已经打开的标签页，做完要关掉。
-  Every agent opens its own new tab, never reuses mine, and closes it when done.
+- 所有 agent 一律用后台无头浏览器（Playwright），不在我的 Chrome 里开标签页或窗口。只有我说"开给我看"时才开可见窗口，而且是单独的新窗口。
+  Every agent uses a background headless browser (Playwright), never tabs or windows in my Chrome. Open a visible window only when I ask, and then a separate new one.
 - 不要把链接里的 token 贴进聊天。
   Never paste link tokens into chat.
 

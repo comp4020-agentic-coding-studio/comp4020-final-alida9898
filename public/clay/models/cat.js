@@ -2,7 +2,7 @@
 // are a single surface melted together from soft shapes, so legs grow out of the body with
 // no seams, and the stripes are painted on by one function of the rest-pose position, so
 // the bands on the back run on down the legs. Face details (eyes, ears, nose) ride the
-// head bone. ~32 cm long standing; paws rest on y = 0.
+// head bone. ~34 cm nose to rump standing (slender body), ~60 with the tail; paws rest on y = 0.
 // Origin: on the ground under the belly. The cat faces / walks toward +X; +Y up.
 // opts: `coat` — a key of COATS (default "tabby") or a coat object.
 //
@@ -22,20 +22,36 @@ export const COATS = {
 };
 
 // ---- rest skeleton (rig space, cm). Legs are straight down: the standing cat. ----
+// Torso and neck/head pivots were pulled closer together (was: root/hips/chest spread over
+// 10cm of x, neck reaching to x=8.5, head to x=11) so the head sits further back over a
+// rounder, more compact body by default — see the head/body proportion note above `build`.
+// Leg bones (shoulder…toe, hip…foot) are untouched: moving a torso bone's own position never
+// shifts its children's rest-pose world position (bone() rebuilds each child's offset from
+// its absolute coordinate), so the legs stay exactly where they were.
 const B = {
-  root: [0, 12.5, 0], hips: [-5, 12.5, 0], chest: [5, 13, 0], neck: [8.5, 15.5, 0], head: [11, 18.5, 0],
+  root: [-0.8, 13.0, 0], hips: [-4.2, 13.0, 0], chest: [3.0, 13.3, 0], neck: [5.3, 15.6, 0], head: [7.1, 18.2, 0],
   shoulder: [5.8, 10.5, 2.7], elbow: [5.2, 6, 2.7], wrist: [6, 1.7, 2.7], toe: [7.6, 1.15, 2.7],
   hip: [-6, 11, 3.1], knee: [-3.4, 6.6, 3.2], hock: [-7.4, 2.7, 3.2], foot: [-5.6, 1.15, 3.2],
   tail0: [-10, 14, 0],
 };
-const TAIL_SEG = 4.3, TAIL_N = 5;
+const TAIL_SEG = 5.0, TAIL_N = 5;   // long thin tail
 // Face numbers: tuned by eye in /cat.html?editor and exported to assets/editor/cat.json.
 // The head is ONE lump of clay (an ellipsoid); every number here is in cm, rig space.
+// headX/headY are the head's own position in rig space (independent of the `head` bone's
+// pivot, B.head above — the bone is only the rotation hinge). Chibi proportion: a big head
+// (headW/H/D bumped up) over a short round body.
+// Slender-cat pass (2026-10-26): started from the user's editor export (headX 9.1, headY 20.85,
+// headW 6.25, headH 5.55, headD 5.65, eyeY 21.65, eyeSpread 0.55, eyeSize 2.05, eyeSink 0.4,
+// noseY -0.45, earSpread 3.1, earUp 4.4), then the whole head shrunk ×0.68 for the long thin
+// body: every size and every offset from the head centre (eye row, nose, ears) scaled by the
+// same factor, so the eyes and ears keep exactly the user's placement relative to the head.
+// eyeSpread is a direction ratio, so it stays as is. The head moved forward/down to sit on the
+// end of the longer neck.
 export const FACE = {
-  headX: 13, headY: 21.3,           // head centre
-  headW: 5.0, headH: 4.4, headD: 4.6, // half width (side to side), half height, half depth (nose to back)
-  eyeY: 21.6, eyeSpread: 0.5, eyeSize: 1.75, eyeSink: 0.5,
-  noseY: -0.45, earSpread: 2.3, earUp: 3.85,
+  headX: 10.9, headY: 19.0,           // head centre
+  headW: 4.25, headH: 3.8, headD: 3.85, // half width (side to side), half height, half depth (nose to back)
+  eyeY: 19.54, eyeSpread: 0.55, eyeSize: 1.4, eyeSink: 0.27,
+  noseY: -0.31, earSpread: 2.1, earUp: 3.0,
 };
 
 const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
@@ -84,31 +100,82 @@ export function build(kit, opts = {}) {
   const prims = [];
   const ell = (c, r, b, k = 1.6) => prims.push({ t: 0, c, r, b, k });
   const cap = (a, b2, ra, rb, b, k = 1.4) => prims.push({ t: 1, a, b: b2, ra, rb, bone: b, k });
-  ell([4.2, 12.9, 0], [5.9, 6.1, 5.7], "chest");
-  ell([-0.3, 12.6, 0], [5.8, 5.9, 5.8], "root");
-  ell([-5.3, 12.7, 0], [5.3, 5.8, 5.7], "hips");
-  cap([7.2, 14.8, 0], [10.6, 17.4, 0], 3.7, 3.0, "neck", 1.6);
-  // head: one lump of clay; its size comes from FACE
-  ell(HEAD_C, [F.headD, F.headH, F.headW], "head", 1.2);
-  for (const [k, s] of [["l", 1], ["r", -1]]) {
-    cap(mir(B.shoulder, s), mir(B.elbow, s), 2.55, 1.85, `leg-f${k}-shoulder`);
-    cap(mir(B.elbow, s), mir(B.wrist, s), 1.85, 1.55, `leg-f${k}-elbow`, 1.0);
-    ell(mir([7, 1.25, 2.7], s), [2.15, 1.2, 1.7], `leg-f${k}-wrist`, 1.0);
-    cap(mir(B.hip, s), mir(B.knee, s), 3.7, 2.1, `leg-h${k}-hip`, 1.6);
-    cap(mir(B.knee, s), mir(B.hock, s), 1.85, 1.45, `leg-h${k}-knee`, 1.0);
-    cap(mir(B.hock, s), mir([-5.9, 1.45, 3.2], s), 1.3, 1.25, `leg-h${k}-hock`, 0.8);
-    ell(mir([-5.4, 1.2, 3.2], s), [2.0, 1.15, 1.65], `leg-h${k}-hock`, 0.8);
+  // torso: ONE primitive, not three balls smooth-unioned (three lobes always show three bumps
+  // from the side, however big or blended). A tapered capsule was tried next and read as a
+  // saddle (round end caps, flatter middle). So the torso is ONE egg: a single ellipsoid whose height and
+  // width shrink a little toward the chest end (u = -1 rump … +1 chest). Fattest in the middle,
+  // outward-curving everywhere, no interior dip possible. a/b are only used for skin weights.
+  // Containment: normalized distance to B.shoulder ≈0.96, to B.hip ≈0.86 (both inside).
+  // Slender-cat pass: the round egg became ONE long sausage with an oval cross-section and the
+  // same thickness from chest to rump (t:3 below): a flat back line, ~25 cm nose-of-chest to
+  // rump. Its core runs x −8.6…6.4; ends are rounded with the cross-section radii.
+  // Containment: shoulder and hip joints sit at/just inside the surface (normalized ≈0.97 / 0.96).
+  prims.push({ t: 3, a: [-8.6, 12.8, 0], b: [6.4, 12.8, 0], ry: 3.8, rz: 3.4,
+    bone: "root", k: 1.8, torso: true });
+  // neck: re-tuned to span the new, shorter neck→head bone gap (was built for
+  // B.neck=[8.5,15.5,0]→B.head=[11,18.5,0]; now B.neck=[5.3,15.6,0]→B.head=[7.1,18.2,0]).
+  // Endpoints keep the same offset from the head's actual visual centre (HEAD_C) as before,
+  // so the neck still tucks under the back of the head lump the same way.
+  // slender neck: rises out of the front of the sausage and runs into the back of the
+  // (smaller) head with a wide blend, so head and neck read as one line
+  cap([6.2, 14.0, 0], [HEAD_C[0] - 1.4, HEAD_C[1] - 1.0, 0], 2.5, 2.1, "neck", 2.0);
+  // head: one lump of clay; its size comes from FACE. Narrower toward the chin (ty) so the
+  // face reads as a soft triangle from the front: wide between the ears, small chin.
+  prims.push({ t: 0, c: HEAD_C, r: [F.headD, F.headH, F.headW], b: "head", k: 1.6, ty: 0.28 });
+  // ear roots: small bumps fused into the head surface (via the smooth union below) so each
+  // ear's base has no seam — the decorative cone meshes (built further down) sit right on
+  // top of these. Positioned the same way the ear group itself is (HEAD_C offset by
+  // F.earUp/F.earSpread), just computed directly in rig space instead of head-bone-local space.
+  for (const s of [1, -1]) {
+    ell([HEAD_C[0] - 0.35, HEAD_C[1] + F.earUp, s * F.earSpread], [1.15, 1.4, 0.9], "head", 0.8);
   }
+  for (const [k, s] of [["l", 1], ["r", -1]]) {
+    // thin straight legs (slender-cat pass: about 2/3 of the old radii)
+    cap(mir(B.shoulder, s), mir(B.elbow, s), 1.75, 1.35, `leg-f${k}-shoulder`, 1.2);
+    cap(mir(B.elbow, s), mir(B.wrist, s), 1.35, 1.15, `leg-f${k}-elbow`, 0.8);
+    ell(mir([6.8, 1.1, 2.7], s), [1.7, 1.0, 1.3], `leg-f${k}-wrist`, 0.8);
+    cap(mir(B.hip, s), mir(B.knee, s), 2.3, 1.45, `leg-h${k}-hip`, 1.4);
+    cap(mir(B.knee, s), mir(B.hock, s), 1.35, 1.1, `leg-h${k}-knee`, 0.8);
+    cap(mir(B.hock, s), mir([-5.9, 1.35, 3.2], s), 1.05, 1.0, `leg-h${k}-hock`, 0.7);
+    ell(mir([-5.5, 1.05, 3.2], s), [1.65, 0.98, 1.3], `leg-h${k}-hock`, 0.7);
+  }
+  // tail root: the base of segment 0 used to start at [-8,14.4,0], which is actually just
+  // OUTSIDE the hips ellipsoid (normalized distance ≈1.08 from the hips centre below) — a
+  // thin 1.5cm-radius tube meeting a much bigger round hip there, with only k=1.6 of blend,
+  // reads as a notch/dent (confirmed in a rear-view screenshot: a visible step where the
+  // tail starts). Fixed by starting the root well inside the hips lump, fattening the root
+  // radius so it tapers down from something close to the hip's own curvature instead of
+  // jumping straight to a thin tube, and widening k so the two surfaces melt together over
+  // a wider area. (Normalized distance from the hips centre to this new start point ≈0.77,
+  // comfortably inside.)
+  // slender-cat pass: a thin tail rooted inside the rump end of the sausage
+  const tailRootStart = [-10.0, 13.6, 0];
   for (let i = 0; i < TAIL_N; i++) {
-    const a = i === 0 ? [-8, 14.4, 0] : tailAbs[i];
-    cap(a, tailAbs[i + 1], 1.5 - 0.1 * i, 1.5 - 0.1 * (i + 1), `tail-${i}`, i === 0 ? 1.6 : 0.6);
+    const a = i === 0 ? tailRootStart : tailAbs[i];
+    const ra = i === 0 ? 1.7 : 1.05 - 0.06 * i, rb = 1.05 - 0.06 * (i + 1);
+    cap(a, tailAbs[i + 1], ra, rb, `tail-${i}`, i === 0 ? 1.8 : 0.5);
   }
   for (const p of prims) { if (p.t === 0) { p.bone = p.b; } }
 
   const sdOne = (p, x, y, z) => {
     if (p.t === 0) {
-      const dx = (x - p.c[0]) / p.r[0], dy = (y - p.c[1]) / p.r[1], dz = (z - p.c[2]) / p.r[2];
-      return (Math.sqrt(dx * dx + dy * dy + dz * dz) - 1) * Math.min(p.r[0], p.r[1], p.r[2]);
+      // ty: z radius shrinks toward the bottom of the ellipsoid (a chin), grows toward the top
+      const rz = p.ty ? p.r[2] * (1 + p.ty * Math.min(1, Math.max(-1, (y - p.c[1]) / p.r[1]))) : p.r[2];
+      const dx = (x - p.c[0]) / p.r[0], dy = (y - p.c[1]) / p.r[1], dz = (z - p.c[2]) / rz;
+      return (Math.sqrt(dx * dx + dy * dy + dz * dz) - 1) * Math.min(p.r[0], p.r[1], rz);
+    }
+    if (p.t === 3) {
+      // sausage along x (a→b) with an oval (ry × rz) cross-section and rounded ends
+      const cx = Math.min(p.b[0], Math.max(p.a[0], x));
+      const dx = (x - cx) / p.ry, dy = (y - p.a[1]) / p.ry, dz = (z - p.a[2]) / p.rz;
+      return (Math.sqrt(dx * dx + dy * dy + dz * dz) - 1) * Math.min(p.ry, p.rz);
+    }
+    if (p.t === 2) {
+      // egg: ellipsoid whose y/z radii scale by (1 - egg*u), u = clamped x position along it
+      const u = Math.min(1, Math.max(-1, (x - p.c[0]) / p.r[0])), s = 1 - p.egg * u;
+      const rx = p.r[0], ry = p.r[1] * s, rz = p.r[2] * s;
+      const dx = (x - p.c[0]) / rx, dy = (y - p.c[1]) / ry, dz = (z - p.c[2]) / rz;
+      return (Math.sqrt(dx * dx + dy * dy + dz * dz) - 1) * Math.min(rx, ry, rz);
     }
     const bx = p.b[0] - p.a[0], by = p.b[1] - p.a[1], bz = p.b[2] - p.a[2];
     const px = x - p.a[0], py = y - p.a[1], pz = z - p.a[2];
@@ -127,7 +194,7 @@ export function build(kit, opts = {}) {
   };
 
   // ---- surface nets over the field → one closed mesh ----
-  const step = 0.36, min = [-33.2, -0.9, -8], max = [21.2, 27, 8];
+  const step = 0.36, min = [-37.2, -0.9, -7.2], max = [18.4, 26, 7.2];
   const nx = Math.ceil((max[0] - min[0]) / step) + 1, ny = Math.ceil((max[1] - min[1]) / step) + 1, nz = Math.ceil((max[2] - min[2]) / step) + 1;
   const val = new Float32Array(nx * ny * nz);
   const id = (i, j, k) => i + nx * (j + ny * k);
@@ -188,7 +255,23 @@ export function build(kit, opts = {}) {
     const acc = new Map();
     let dmin = 1e9;
     const ds = prims.map((p) => { const d = sdOne(p, x, y, z); dmin = Math.min(dmin, d); return d; });
-    prims.forEach((p, i) => { const w = Math.exp(-(ds[i] - dmin) / 0.55); acc.set(p.bone, (acc.get(p.bone) || 0) + w); });
+    prims.forEach((p, i) => {
+      const w = Math.exp(-(ds[i] - dmin) / 0.55);
+      if (p.torso) {
+        // the one-piece torso spindle has no single bone to skin to: blend "hips" (rump end,
+        // t=0 at TORSO_A) to "chest" (shoulder end, t=1 at TORSO_B) along its own axis, so the
+        // always-on chest breathing scale and the sit/stretch chest/hips pose sway still move
+        // this mesh the way they moved the old three-lobe torso, just as a smooth gradient
+        // instead of three discrete 100%-weighted chunks.
+        const bx = p.b[0] - p.a[0], by = p.b[1] - p.a[1], bz = p.b[2] - p.a[2];
+        const px = x - p.a[0], py = y - p.a[1], pz = z - p.a[2];
+        const t = Math.min(1, Math.max(0, (px * bx + py * by + pz * bz) / (bx * bx + by * by + bz * bz)));
+        acc.set("hips", (acc.get("hips") || 0) + w * (1 - t));
+        acc.set("chest", (acc.get("chest") || 0) + w * t);
+      } else {
+        acc.set(p.bone, (acc.get(p.bone) || 0) + w);
+      }
+    });
     const top = [...acc].sort((a, b) => b[1] - a[1]).slice(0, 4);
     const sum = top.reduce((s, [, w]) => s + w, 0);
     top.forEach(([bn, w], q) => { skinI[v * 4 + q] = boneIdx[bn]; skinW[v * 4 + q] = w / sum; });
@@ -198,7 +281,7 @@ export function build(kit, opts = {}) {
   function paint(x, y, z, out) {
     out.set(coat.base);
     const az = Math.abs(z);
-    const tail = smooth(-10, -12, x) * smooth(9.5, 11, y);
+    const tail = smooth(-12.2, -13.8, x) * smooth(9.5, 11, y);
     const hd = Math.hypot((x - HEAD_C[0]) / (F.headD + 1), (y - HEAD_C[1]) / (F.headH + 1), (z - HEAD_C[2]) / (F.headW + 1));
     const inHead = smooth(1.15, 0.95, hd) * smooth(15.5, 17, y);
     if (coat.stripe) {
@@ -211,8 +294,8 @@ export function build(kit, opts = {}) {
       let s = smooth(0.2, 0.85, Math.sin(u * 2.05));
       s *= 1 - inHead;
       let w = s * (0.92 - 0.25 * smooth(15, 11, y) * (1 - leg) * (1 - tail));
-      w = Math.max(w, smooth(16.2, 17.4, y) * smooth(1.6, 0.6, az) * (1 - tail) * (1 - inHead) * 0.85);   // dark spine line
-      w = Math.max(w, smooth(-28.5, -30.5, x) * tail);                                                     // dark tail tip
+      w = Math.max(w, smooth(15.0, 16.0, y) * smooth(1.4, 0.5, az) * (1 - tail) * (1 - inHead) * 0.85);   // dark spine line
+      w = Math.max(w, smooth(-32.5, -34.5, x) * tail);                                                     // dark tail tip
       // head: the forehead "M", stripes on the crown and back of head, a cheek line
       // head markings are placed relative to the head (hx = forward of centre, hy = up) so they follow FACE edits
       const hx = x - HEAD_C[0], hy = y - HEAD_C[1];
@@ -230,8 +313,8 @@ export function build(kit, opts = {}) {
       out.lerp(tmp.set(c), smooth(r, r - 1.2, Math.hypot(x - px, y - py, z - pz)));
     }
     // cream: belly, inner legs, chest and throat, muzzle and chin, white toes
-    let cr = smooth(10.6, 9.2, y) * smooth(2.9, 2.2, az) * (1 - tail);
-    cr = Math.max(cr, smooth(9.4, 10.8, x) * smooth(17.6, 15.6, y) * smooth(3.6, 2.4, az) * (1 - inHead));
+    let cr = smooth(10.4, 9.2, y) * smooth(2.3, 1.6, az) * (1 - tail);
+    cr = Math.max(cr, smooth(8.6, 10.0, x) * smooth(17.0, 15.0, y) * smooth(3.2, 2.1, az) * (1 - inHead));
     const fx = x - HEAD_C[0] - F.headD, fy = y - HEAD_C[1] - F.noseY;      // from the nose
     cr = Math.max(cr, smooth(-1.4, -0.6, fx) * smooth(0.2, -0.5, fy) * inHead);   // muzzle
     cr = Math.max(cr, smooth(-F.headH * 0.35, -F.headH * 0.55, y - HEAD_C[1]) * inHead * smooth(-0.5, 1, x - HEAD_C[0]));  // chin and throat
@@ -344,14 +427,15 @@ export function build(kit, opts = {}) {
     const earShape = (r, h) => {
       const g2 = new THREE.ConeGeometry(r, h, 24, 6), ep = g2.attributes.position;
       for (let i = 0; i < ep.count; i++) {
-        const t = (ep.getY(i) + h / 2) / h, k = 1 + 0.18 * Math.sin(Math.PI * t);
+        const t = (ep.getY(i) + h / 2) / h, k = 1 + 0.08 * Math.sin(Math.PI * t);
         ep.setX(i, ep.getX(i) * k); ep.setZ(i, ep.getZ(i) * k * 0.55);
-        if (t > 0.85) ep.setY(i, ep.getY(i) - (t - 0.85) * h * 0.35);
+        if (t > 0.9) ep.setY(i, ep.getY(i) - (t - 0.9) * h * 0.2);
       }
       g2.computeVertexNormals(); return g2;
     };
-    const outer = piece(earShape(2.3, 4.2), baseM); outer.position.y = 1.7;
-    const inner = piece(earShape(1.4, 2.9), shiny(coat.ear, 0.5)); inner.position.set(0, 1.35, 0.62); inner.rotation.x = -0.1;
+    // tall pointed ears for the smaller triangular head
+    const outer = piece(earShape(1.6, 3.6), baseM); outer.position.y = 1.4;
+    const inner = piece(earShape(0.95, 2.5), shiny(coat.ear, 0.5)); inner.position.set(0, 1.1, 0.45); inner.rotation.x = -0.1;
     face.add(outer, inner); ear.add(face); head.add(ear);
   }
   const nose = sph(0.55, 0.4, 0.72, shiny(coat.nose, 0.3)); nose.position.set(hc[0] + F.headD + 0.3, hc[1] + F.noseY, 0);
@@ -361,20 +445,22 @@ export function build(kit, opts = {}) {
     const c = new THREE.QuadraticBezierCurve3(new THREE.Vector3(hc[0] + F.headD + 0.3, hc[1] + F.noseY - 0.35, 0), new THREE.Vector3(hc[0] + F.headD + 0.35, hc[1] + F.noseY - 1.25, s * 0.45), new THREE.Vector3(hc[0] + F.headD, hc[1] + F.noseY - 1.1, s * 1.05));
     head.add(piece(new THREE.TubeGeometry(c, 8, 0.09, 5), lineM));
   }
-  const mouth = sph(0.6, 0.65, 0.55, shiny(0x7d4644, 0.6)); mouth.name = "cat-mouth";
-  mouth.position.set(hc[0] + F.headD - 0.1, hc[1] + F.noseY - 1.55, 0); mouth.scale.setScalar(0.01);
+  // sized for the smaller head (slender-cat pass) so the open mouth stays inside the muzzle
+  const mouth = sph(0.42, 0.46, 0.4, shiny(0x7d4644, 0.6)); mouth.name = "cat-mouth";
+  mouth.position.set(hc[0] + F.headD - 0.45, hc[1] + F.noseY - 1.55, 0); mouth.scale.setScalar(0.01);
   head.add(mouth);
   // paw pads: one heel pad and three toe beans under each paw, pink
   const padM = shiny(coat.pad || coat.nose, 0.45);
   const pads = (b, cx, cz) => {
     const bAbs = b.userData.abs;
-    const heel = sph(0.75, 0.16, 0.85, padM, [16, 8]); heel.position.set(cx - bAbs[0] - 0.2, 0.1 - bAbs[1], 0); b.add(heel);
-    for (const dz of [-0.75, 0, 0.75]) {
-      const t = sph(0.36, 0.13, 0.36, padM, [12, 8]); t.position.set(cx - bAbs[0] + 1.1 - Math.abs(dz) * 0.3, 0.12 - bAbs[1], dz); b.add(t);
+    // sized for the thinner paws (slender-cat pass, ×0.8)
+    const heel = sph(0.6, 0.14, 0.68, padM, [16, 8]); heel.position.set(cx - bAbs[0] - 0.2, 0.1 - bAbs[1], 0); b.add(heel);
+    for (const dz of [-0.6, 0, 0.6]) {
+      const t = sph(0.29, 0.12, 0.29, padM, [12, 8]); t.position.set(cx - bAbs[0] + 0.9 - Math.abs(dz) * 0.3, 0.12 - bAbs[1], dz); b.add(t);
     }
     void cz;
   };
-  for (const k of ["l", "r"]) { pads(byName[`leg-f${k}-wrist`], 7, 0); pads(byName[`leg-h${k}-hock`], -5.4, 0); }
+  for (const k of ["l", "r"]) { pads(byName[`leg-f${k}-wrist`], 6.8, 0); pads(byName[`leg-h${k}-hock`], -5.5, 0); }
 
   const g = new THREE.Group(); g.name = name;
   g.add(kit.part(name, { mount: "surface", order: 1 }, rig));
@@ -403,7 +489,7 @@ const P = (o) => ({
   tail: [[-0.9, 0], [-0.2, 0], [0.15, 0], [0.35, 0], [0.45, 0]], ...o,
 });
 const LOAF = P({
-  y: -7.1, hp: 0.05, hy: -0.45, neck: -0.15,
+  y: -8.6, hp: 0.05, hy: -0.45, neck: -0.15,
   feet: { fl: [8.6, 1.35, 0, 0], fr: [8.9, 1.35, 0, 0], hl: [-9.2, 1.25, 0.82, 0], hr: [-9.2, 1.25, 0.82, 0] },
   tail: [[0.75, 0.55], [-0.75, 0.55], [0, 0.55], [0, 0.5], [0, 0.45]],
 });

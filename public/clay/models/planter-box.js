@@ -1,8 +1,9 @@
 // Raised wooden planter box (flower bed) with soil and low green herb clumps.
+// `herbs` (optional colour list) recolours the clumps, e.g. dry/frosted in winter; null keeps the greens.
 // One part `<name>` (floor). Origin: bottom-centre. Front +Z. Default 110 × 40 × 38 cm.
 export const SOIL_Y = 34;
 
-export function build(kit, { name = "planter-box", width = 110, depth = 40, wood = "brown", seed = 7 } = {}) {
+export function build(kit, { name = "planter-box", width = 110, depth = 40, wood = "brown", seed = 7, herbs = null } = {}) {
   const { THREE } = kit;
   const g = new THREE.Group(); g.name = name;
   const W = width, D = depth, m = [], r = kit.rng(seed);
@@ -21,7 +22,7 @@ export function build(kit, { name = "planter-box", width = 110, depth = 40, wood
   const n = Math.round(W / 18);
   for (let i = 0; i < n; i++) {
     const x = -W / 2 + 12 + (i * (W - 24)) / Math.max(1, n - 1);
-    const shade = i % 2 ? "leaf" : 0x6a8a4c;
+    const shade = herbs ? herbs[i % herbs.length] : i % 2 ? "leaf" : 0x6a8a4c;
     const c = kit.blob(7 + r() * 2, 6 + r() * 3, 7, shade); c.position.set(x, SOIL_Y + 4, (r() - 0.5) * 8); m.push(c);
   }
   g.add(kit.part(name, { mount: "floor", order: 1 }, ...m));

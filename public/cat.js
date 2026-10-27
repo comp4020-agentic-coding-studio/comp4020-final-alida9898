@@ -129,11 +129,11 @@ if (new URLSearchParams(location.search).has("editor")) {
   try { const r = await fetch("/api/editor/cat"); if (r.ok) Object.assign(face, (await r.json()).face || {}); } catch {}
   makeCat(curCoat);
   const SL = [
-    ["headW", "头宽 Head width", 3.5, 6.5], ["headH", "头高 Head height", 3, 6], ["headD", "头前后 Head depth", 3.5, 6],
-    ["headY", "头上下 Head up/down", 19.5, 23], ["headX", "头前后位置 Head fwd/back", 11.5, 14.5],
-    ["eyeY", "眼睛高低 Eye height", 19.5, 24], ["eyeSpread", "两眼距离 Eye spacing", 0.25, 0.9], ["eyeSize", "眼睛大小 Eye size", 1.1, 2.6],
+    ["headW", "头宽 Head width", 3, 6.5], ["headH", "头高 Head height", 2.8, 6], ["headD", "头前后 Head depth", 2.8, 6],
+    ["headY", "头上下 Head up/down", 16.5, 22], ["headX", "头前后位置 Head fwd/back", 8.5, 13],
+    ["eyeY", "眼睛高低 Eye height", 16.5, 23], ["eyeSpread", "两眼距离 Eye spacing", 0.25, 0.9], ["eyeSize", "眼睛大小 Eye size", 0.9, 2.4],
     ["eyeSink", "眼睛凸出 Eye bulge", 0, 1.2], ["noseY", "鼻子高低 Nose height", -2, 1],
-    ["earSpread", "两耳距离 Ear spacing", 1.2, 3.5], ["earUp", "耳朵高低 Ear height", 2.5, 5],
+    ["earSpread", "两耳距离 Ear spacing", 1.2, 3.5], ["earUp", "耳朵高低 Ear height", 2, 4.5],
   ];
   const panel = document.createElement("div");
   panel.style.cssText = "position:fixed;top:10px;left:10px;z-index:10;background:var(--paper);border:1.5px solid var(--stitch);border-radius:12px;padding:10px 12px;font-size:13px;max-height:calc(100vh - 20px);overflow:auto;width:260px";

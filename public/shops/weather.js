@@ -30,7 +30,7 @@ export const WEATHER = {
   spring: { top: "#a9cbe6", bottom: "#f8eedc", fog: 0xf3ead9, grass: 0xa9c07e, crown: [0x9fbf6a, 0xf2c4d0], bits: { n: 40, colors: [0xf2b8c6, 0xf7cfd8, 0xfaf6ef], size: 4, fall: 22, sway: 30 } },
   summer: { top: "#6fb0e3", bottom: "#eaf2f0", fog: 0xe4eee8, grass: 0x8fae68, crown: [0x6f9a4e, 0x86ad5c], bits: { n: 14, colors: [0xfff4c4], size: 2, fall: 6, sway: 12 } },
   autumn: { top: "#e8b779", bottom: "#f6dcc6", fog: 0xf1dcc4, grass: 0xb5b075, crown: [0xd9822f, 0xc8694a, 0xe0a23a], bits: { n: 36, colors: [0xd9822f, 0xc8694a, 0xe0a23a, 0xb5532e], size: 6, fall: 30, sway: 40 } },
-  winter: { top: "#b8c7d6", bottom: "#eef0f2", fog: 0xe8ecef, grass: 0xbcc2a8, crown: [0xe9ece8, 0x9aa88c], bits: { n: 70, colors: [0xffffff, 0xf3f1ec], size: 3, fall: 28, sway: 14 } },
+  winter: { top: "#b8c7d6", bottom: "#eef0f2", fog: 0xe8ecef, grass: 0xd3cebf, crown: [0xe9ece8, 0xa79d8a], bits: { n: 70, colors: [0xffffff, 0xf3f1ec], size: 3, fall: 28, sway: 14 } },
 };
 
 // Weather conditions, independent of season.
