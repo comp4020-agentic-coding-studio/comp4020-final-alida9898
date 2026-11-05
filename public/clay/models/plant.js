@@ -1,13 +1,14 @@
 // Potted plant: ONE part `<name>` — the terracotta pot (from pot.js) + soil + three
 // leaf clumps. A person carries the whole plant, so it is one sticker.
 // Origin: bottom-centre of the pot on the floor. Front faces +Z.
-// opts: `potScale` (pot size), `leafScale` (leaf size), `color` (leaf colour).
+// opts: `potScale` (pot size), `leafScale` (leaf size), `color` (leaf colour),
+// `shade` (optional back-leaf colour, e.g. frosted green in winter; null = 0.82 x `color`).
 import { potMeshes } from "./pot.js";
 
-export function build(kit, { name = "plant", potScale = 1.6, leafScale = 1.2, color = "leaf" } = {}) {
+export function build(kit, { name = "plant", potScale = 1.6, leafScale = 1.2, color = "leaf", shade = null } = {}) {
   const g = new kit.THREE.Group();
   g.name = name;
-  const dark = new kit.THREE.Color(typeof color === "string" ? kit.PALETTE[color] : color).multiplyScalar(0.82).getHex();
+  const dark = shade ?? new kit.THREE.Color(typeof color === "string" ? kit.PALETTE[color] : color).multiplyScalar(0.82).getHex();
 
   // a chunky clay leaf: a flattened blob tilted outward from its base
   const leaf = (len, wid, tiltZ, tiltX, shade) => {

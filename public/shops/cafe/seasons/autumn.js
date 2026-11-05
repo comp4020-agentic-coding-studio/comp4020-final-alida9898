@@ -57,14 +57,15 @@ export const decor = [
   {
     level: "yard", zone: "garden",
     async populate({ group, model, place }) {
-      // rake leaning against the back fence (fence run z = 8), left of the bench (bench at
-      // x 420 z 72) and well clear of the tree (540, 110) and planter (586, 300). turn: 0
-      // keeps its lean pointing toward -Z, i.e. back toward the fence run.
-      const rake = place(await model("rake", { name: "yard-autumn-rake" }), { x: 350, y: 0, z: 42, turn: 0 });
+      // rake leaning against the back fence (fence run z = 8) in the gap between the bench's
+      // right end (x 478) and the tree trunk (540, 110), so from the yard camera the tines
+      // show between the two instead of behind the bench. turn 0 keeps its lean pointing
+      // toward -Z (onto the fence run); the foot sits ~30 cm out so the handle top meets it.
+      const rake = place(await model("rake", { name: "yard-autumn-rake" }), { x: 506, y: 0, z: 38, turn: 0 });
       rake.userData.item = { id: "yard-autumn-rake", parent: null, layer: 1, label: L("靠着篱笆的耙子", "Rake against the fence") };
       // pile of fallen leaves on open grass, between the path and the tree, clear of the
       // stepping stones (x 340…474, z 382…474) and the tree trunk
-      const pile = place(await model("leaf-pile", { name: "yard-autumn-leafpile", radius: 34 }), { x: 470, y: 0, z: 170 });
+      const pile = place(await model("leaf-pile", { name: "yard-autumn-leafpile", radius: 26 }), { x: 470, y: 0, z: 170 });
       pile.userData.item = { id: "yard-autumn-leafpile", parent: null, layer: 1, label: L("一堆落叶", "A pile of fallen leaves") };
       // basket of apples on the bench seat (top y = 44), away from the armrests, opposite
       // end from summer's watermelon plate (which sits at x 400 z 78)

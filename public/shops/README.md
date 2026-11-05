@@ -85,8 +85,8 @@ TODO (planned, not built):
   leaf garland on the bean shelf; yard: a rake leaning on the fence, a leaf pile, a
   basket of apples on the bench.
 - **winter**: a knitted scarf on the coat/umbrella stand, a hot-chocolate mug set on the
-  counter, fairy lights along the bay window; yard: a small snowman, a sled against the
-  fence, a lantern on the mailbox.
+  counter, fairy lights around the arched window; yard: a small snowman, a wooden sled by the
+  mailbox, a lantern on the mailbox.
 
 ## Base café yard (5 items)
 

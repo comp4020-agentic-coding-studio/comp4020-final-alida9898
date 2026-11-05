@@ -80,8 +80,10 @@ export async function populate({ kit, THREE, group, model, place, season }) {
     { id: "l1-lounge-shelf-plant-2", ...on, label: L("书架小盆栽 2", "Shelf plant 2") });
 
   // ---------------------------------------------------------------- window sill plants
+  // winter (colour only): snow-dusted front leaves over frosted sage back leaves
+  const frost = season === "winter" ? { color: 0xe4e9e4, shade: 0x93a88e } : null;
   for (const [i, z] of [228, 292].entries()) {
-    await item("plant", { potScale: 0.55, leafScale: 0.5, color: i ? 0x8aa868 : "leaf" }, { x: 292, y: 90, z, turn: -90 },
+    await item("plant", { potScale: 0.55, leafScale: 0.5, color: i ? 0x8aa868 : "leaf", ...frost }, { x: 292, y: 90, z, turn: -90 },
       { id: `l1-lounge-sill-plant-${i + 1}`, layer: 2, label: L(`窗台盆栽 ${i + 1}`, `Sill plant ${i + 1}`) });
   }
 }

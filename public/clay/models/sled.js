@@ -1,13 +1,13 @@
 // Little wooden sled in pale raw wood, standing on the snow: two side boards that run
 // along the ground and curl up into a round scroll at the front, a seat of five cross
 // slats on short posts, a curved backrest on two posts at the back, and a pull rope
-// tied to the front bar that drops to the ground and ends in a loose coil.
+// tied to the front bar (red, so it shows on the snow) that drops to the ground and ends in a loose coil.
 // One part `<name>` (floor) — the rope comes with it. Built a little oversize so it
 // reads from the yard view: ~96 long × 40 wide × 50 to the top of the backrest.
 // Origin: on the ground, centre of the runners' footprint. Faces +Z (front scroll +
 // rope); +X is its left side. opts: `wood` (colour), `rope` (colour).
 // (`metal` / `lean` from the old leaning sled are accepted and ignored.)
-export function build(kit, { name = "sled", wood = 0xdcbf94, rope = 0xc8b18a } = {}) {
+export function build(kit, { name = "sled", wood = 0xdcbf94, rope = 0xc23b2e } = {}) {
   const { THREE } = kit;
   const g = new THREE.Group(); g.name = name;
   const m = [];

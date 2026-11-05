@@ -43,7 +43,7 @@ export const decor = [
     // chalkboard (x ≥ −146 is right of the string's x ≤ −139 only above y ≈ 190).
     async populate({ group, model, place }) {
       const o = place(await model("fairy-lights", { name: "l0-winter-fairy-lights", arch: 62, depth: 14, bulb: 1.8 }), { x: -200, y: 180, z: 0 });
-      o.userData.item = { id: "l0-winter-fairy-lights", parent: null, layer: 1, label: L("拱窗上的灯串", "Fairy lights on the arched window") };
+      o.userData.item = { id: "l0-winter-fairy-lights", parent: null, layer: 1, label: L("拱窗上的灯串", "Arched window lights") };
       group.add(o);
     },
   },
