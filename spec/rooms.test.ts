@@ -1,5 +1,11 @@
-import { expect, inject, it } from "vitest";
+import { describe, expect, inject, it } from "vitest";
 
+// Legacy sticker game (before crit 8): two strangers each get half a room via a
+// token link. It has been replaced by account towns (README: accounts + friends
+// replaced invite links on 2026-10-19). It is kept only so the "更早的贴纸版本 /
+// older sticker version" button on the home page (/ -> POST /api/join -> /s/<token>,
+// /house/<token>) still opens the archived earlier prototype. Nothing in the
+// current towns uses these routes.
 const baseUrl = inject("baseUrl");
 const api = (path: string, init?: RequestInit) => fetch(new URL(path, baseUrl), init);
 const post = (path: string, body?: unknown) =>
@@ -59,31 +65,33 @@ it("the side page is served for a half's link", async () => {
   expect(await res.text()).toContain("<div id=\"scene\"");
 });
 
-it("an invite link joins the specific room it names, not a random one", async () => {
-  // force a fresh, empty room: fill any already-open half first
-  let a = await (await post("/api/join")).json();
-  if (!a.opened) a = await (await post("/api/join")).json();
-  expect(a.opened).toBe(true);
+describe("legacy sticker rooms (pre crit 8, replaced by account towns; kept only for the archived older-version button)", () => {
+  it("an invite link joins the specific room it names, not a random one", async () => {
+    // force a fresh, empty room: fill any already-open half first
+    let a = await (await post("/api/join")).json();
+    if (!a.opened) a = await (await post("/api/join")).json();
+    expect(a.opened).toBe(true);
 
-  expect(await (await api(`/api/rooms/${a.room}/status`)).json()).toEqual({ exists: true, full: false });
+    expect(await (await api(`/api/rooms/${a.room}/status`)).json()).toEqual({ exists: true, full: false });
 
-  const b = await (await post(`/api/rooms/${a.room}/join`)).json();
-  expect(b.room).toBe(a.room);
-  expect(new Set([a.side, b.side])).toEqual(new Set(["left", "right"]));
+    const b = await (await post(`/api/rooms/${a.room}/join`)).json();
+    expect(b.room).toBe(a.room);
+    expect(new Set([a.side, b.side])).toEqual(new Set(["left", "right"]));
 
-  expect(await (await api(`/api/rooms/${a.room}/status`)).json()).toEqual({ exists: true, full: true });
-});
+    expect(await (await api(`/api/rooms/${a.room}/status`)).json()).toEqual({ exists: true, full: true });
+  });
 
-it("an invite link rejects a third person once the room is full", async () => {
-  let a = await (await post("/api/join")).json();
-  if (!a.opened) a = await (await post("/api/join")).json();
-  await post(`/api/rooms/${a.room}/join`);
-  expect((await post(`/api/rooms/${a.room}/join`)).status).toBe(409);
-});
+  it("an invite link rejects a third person once the room is full", async () => {
+    let a = await (await post("/api/join")).json();
+    if (!a.opened) a = await (await post("/api/join")).json();
+    await post(`/api/rooms/${a.room}/join`);
+    expect((await post(`/api/rooms/${a.room}/join`)).status).toBe(409);
+  });
 
-it("an invite link for an unknown room is a 404", async () => {
-  expect((await post("/api/rooms/not-a-real-room/join")).status).toBe(404);
-  expect(await (await api("/api/rooms/not-a-real-room/status")).json()).toEqual({ exists: false, full: false });
+  it("an invite link for an unknown room is a 404", async () => {
+    expect((await post("/api/rooms/not-a-real-room/join")).status).toBe(404);
+    expect(await (await api("/api/rooms/not-a-real-room/status")).json()).toEqual({ exists: false, full: false });
+  });
 });
 
 it("a room returns both halves' placed stickers, and an unknown room is a 404", async () => {
