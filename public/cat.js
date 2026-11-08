@@ -134,6 +134,8 @@ if (new URLSearchParams(location.search).has("editor")) {
     ["eyeY", "眼睛高低 Eye height", 16.5, 23], ["eyeSpread", "两眼距离 Eye spacing", 0.25, 0.9], ["eyeSize", "眼睛大小 Eye size", 0.9, 2.4],
     ["eyeSink", "眼睛凸出 Eye bulge", 0, 1.2], ["noseY", "鼻子高低 Nose height", -2, 1],
     ["earSpread", "两耳距离 Ear spacing", 1.2, 3.5], ["earUp", "耳朵高低 Ear height", 2, 4.5],
+    ["bodyGirth", "身体粗细 Body girth", 0.7, 1.5], ["bodyBulge", "身体中段鼓起 Belly bulge", 0, 0.6],
+    ["bodyRound", "身体圆润度 Body roundness", 0, 1],
   ];
   const panel = document.createElement("div");
   panel.style.cssText = "position:fixed;top:10px;left:10px;z-index:10;background:var(--paper);border:1.5px solid var(--stitch);border-radius:12px;padding:10px 12px;font-size:13px;max-height:calc(100vh - 20px);overflow:auto;width:260px";

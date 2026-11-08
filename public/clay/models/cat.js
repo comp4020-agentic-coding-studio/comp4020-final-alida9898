@@ -47,11 +47,20 @@ const TAIL_SEG = 5.0, TAIL_N = 5;   // long thin tail
 // same factor, so the eyes and ears keep exactly the user's placement relative to the head.
 // eyeSpread is a direction ratio, so it stays as is. The head moved forward/down to sit on the
 // end of the longer neck.
+// 2026-11-09: the 15 values below are the user's editor export (assets/editor/cat.json), copied as is.
 export const FACE = {
-  headX: 10.9, headY: 19.0,           // head centre
-  headW: 4.25, headH: 3.8, headD: 3.85, // half width (side to side), half height, half depth (nose to back)
-  eyeY: 19.54, eyeSpread: 0.55, eyeSize: 1.4, eyeSink: 0.27,
-  noseY: -0.31, earSpread: 2.1, earUp: 3.0,
+  headX: 9.6, headY: 19,           // head centre
+  headW: 4.15, headH: 4.35, headD: 3.85, // half width (side to side), half height, half depth (nose to back)
+  eyeY: 20.1, eyeSpread: 0.6, eyeSize: 1.4, eyeSink: 0.27,
+  noseY: -0.25, earSpread: 2.1, earUp: 3,
+  // body shape (2026-11-05 pass): the torso was one straight "sausage" the same thickness
+  // from chest to rump, which read as a stick. These three let the editor round it out
+  // without touching the torso's length (a/b below) or any other bone/primitive.
+  // Defaults reproduce the straight sausage exactly (ry 3.8, rz 3.4, no bulge).
+  bodyGirth: 1,     // overall cross-section scale (both ry and rz), 0.7 (thin) – 1.5 (fat)
+  bodyBulge: 0.35,  // 0 (straight) – 0.6: cross-section grows toward the middle of the torso,
+                    // tapering back to bodyGirth's radius at the chest/rump ends (parabolic, symmetric)
+  bodyRound: 0.55,  // 0 (current flattened oval, ry≠rz) – 1 (circular cross-section, ry=rz)
 };
 
 const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
@@ -110,7 +119,12 @@ export function build(kit, opts = {}) {
   // same thickness from chest to rump (t:3 below): a flat back line, ~25 cm nose-of-chest to
   // rump. Its core runs x −8.6…6.4; ends are rounded with the cross-section radii.
   // Containment: shoulder and hip joints sit at/just inside the surface (normalized ≈0.97 / 0.96).
-  prims.push({ t: 3, a: [-8.6, 12.8, 0], b: [6.4, 12.8, 0], ry: 3.8, rz: 3.4,
+  // body-shape sliders (editor-only, default = the plain sausage above): bodyGirth scales
+  // both radii together, bodyRound pulls rz toward ry (flattened oval → circle), bodyBulge
+  // adds a middle-fat/ends-thin taper along the torso's own length (see sdOne t===3).
+  const torsoRy = 3.8 * F.bodyGirth, torsoRz0 = 3.4 * F.bodyGirth;
+  const torsoRz = torsoRz0 + (torsoRy - torsoRz0) * F.bodyRound;
+  prims.push({ t: 3, a: [-8.6, 12.8, 0], b: [6.4, 12.8, 0], ry: torsoRy, rz: torsoRz, bulge: F.bodyBulge,
     bone: "root", k: 1.8, torso: true });
   // neck: re-tuned to span the new, shorter neck→head bone gap (was built for
   // B.neck=[8.5,15.5,0]→B.head=[11,18.5,0]; now B.neck=[5.3,15.6,0]→B.head=[7.1,18.2,0]).
@@ -165,10 +179,18 @@ export function build(kit, opts = {}) {
       return (Math.sqrt(dx * dx + dy * dy + dz * dz) - 1) * Math.min(p.r[0], p.r[1], rz);
     }
     if (p.t === 3) {
-      // sausage along x (a→b) with an oval (ry × rz) cross-section and rounded ends
+      // sausage along x (a→b) with an oval (ry × rz) cross-section and rounded ends.
+      // bulge (optional): the cross-section radii grow toward the middle of the a→b span and
+      // taper back to the plain ry/rz at the ends, via a symmetric parabola in u = position
+      // along the axis normalized to [-1 (a), 0 (middle), 1 (b)] — unlike the egg's (t:2)
+      // monotonic 1-egg*u taper, this is 1 + bulge*(1-u^2): widest at u=0, back to 1 at u=±1.
+      const span = p.b[0] - p.a[0];
+      const u = span ? Math.min(1, Math.max(-1, ((x - p.a[0]) / span) * 2 - 1)) : 0;
+      const bs = p.bulge ? 1 + p.bulge * (1 - u * u) : 1;
+      const ry = p.ry * bs, rz = p.rz * bs;
       const cx = Math.min(p.b[0], Math.max(p.a[0], x));
-      const dx = (x - cx) / p.ry, dy = (y - p.a[1]) / p.ry, dz = (z - p.a[2]) / p.rz;
-      return (Math.sqrt(dx * dx + dy * dy + dz * dz) - 1) * Math.min(p.ry, p.rz);
+      const dx = (x - cx) / ry, dy = (y - p.a[1]) / ry, dz = (z - p.a[2]) / rz;
+      return (Math.sqrt(dx * dx + dy * dy + dz * dz) - 1) * Math.min(ry, rz);
     }
     if (p.t === 2) {
       // egg: ellipsoid whose y/z radii scale by (1 - egg*u), u = clamped x position along it
